@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: in-progress
-stopped_at: Completed 05-01-PLAN.md
-last_updated: "2026-03-12T21:19:08Z"
-last_activity: 2026-03-12 — Completed Plan 05-01 (Plan Types & DAG Algorithms)
+stopped_at: Completed 05-02-PLAN.md
+last_updated: "2026-03-12T21:28:25Z"
+last_activity: 2026-03-12 — Completed Plan 05-02 (DAG Validation, Decomposition Prompt & Retry Loop)
 progress:
   total_phases: 10
   completed_phases: 4
   total_plans: 17
-  completed_plans: 15
-  percent: 88
+  completed_plans: 16
+  percent: 94
 ---
 
 # Project State
@@ -26,18 +26,18 @@ See: .planning/PROJECT.md (updated 2026-03-12)
 ## Current Position
 
 Phase: 5 of 10 (Phase Decomposition) - IN PROGRESS
-Plan: 1 of 3 in current phase
-Status: Plan 05-01 Complete
-Last activity: 2026-03-12 — Completed Plan 05-01 (Plan Types & DAG Algorithms)
+Plan: 2 of 3 in current phase
+Status: Plan 05-02 Complete
+Last activity: 2026-03-12 — Completed Plan 05-02 (DAG Validation, Decomposition Prompt & Retry Loop)
 
-Progress: [████████░░] 88%
+Progress: [█████████░] 94%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 15
+- Total plans completed: 16
 - Average duration: 4 min
-- Total execution time: 1.1 hours
+- Total execution time: 1.2 hours
 
 **By Phase:**
 
@@ -47,10 +47,10 @@ Progress: [████████░░] 88%
 | 02-agent-clients | 3 | 20 min | 7 min |
 | 03-git-layer | 3 | 11 min | 4 min |
 | 04-input-parsing | 4 | 14 min | 4 min |
-| 05-phase-decomposition | 1/3 | 4 min | 4 min |
+| 05-phase-decomposition | 2/3 | 9 min | 5 min |
 
 **Recent Trend:**
-- Last 5 plans: 03-03 (4 min), 04-01 (6 min), 04-02 (4 min), 04-04 (4 min), 05-01 (4 min)
+- Last 5 plans: 04-01 (6 min), 04-02 (4 min), 04-04 (4 min), 05-01 (4 min), 05-02 (5 min)
 - Trend: Steady
 
 *Updated after each plan completion*
@@ -65,6 +65,7 @@ Progress: [████████░░] 88%
 | Phase 04 P03 | 4min | 2 tasks | 4 files |
 | Phase 04 P04 | 4min | 1 tasks | 2 files |
 | Phase 05 P01 | 4min | 2 tasks | 7 files |
+| Phase 05 P02 | 5min | 2 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -112,6 +113,9 @@ Recent decisions affecting current work:
 - 05-01: DFS color marking (White/Gray/Black) for cycle detection with backtrack extraction
 - 05-01: ContractLabel as String type alias for flexibility with LLM-generated labels
 - [Phase 05]: DAG algorithms as pure functions on &[PhaseSpec] -- no I/O, fully testable without mocks
+- 05-02: BFS transitive closure for contract satisfaction -- Phase C can consume contracts from Phase A via Phase B
+- 05-02: RawPlanResponse wrapper for LLM deserialization -- only phases array, computed fields added post-validation
+- 05-02: Validation error feedback capped at 5 errors to avoid prompt bloat on retry
 
 ### Pending Todos
 
@@ -125,6 +129,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-12T21:19:08Z
-Stopped at: Completed 05-01-PLAN.md
-Resume file: .planning/phases/05-phase-decomposition/05-01-SUMMARY.md
+Last session: 2026-03-12T21:28:25Z
+Stopped at: Completed 05-02-PLAN.md
+Resume file: .planning/phases/05-phase-decomposition/05-02-SUMMARY.md
