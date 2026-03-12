@@ -544,3 +544,96 @@ fn conflict_detection_blocks_commit() {
         err
     );
 }
+
+// ---------------------------------------------------------------------------
+// Plan 03: Full end-to-end workflow test
+// ---------------------------------------------------------------------------
+
+#[test]
+fn full_phase_commit_workflow() {
+    use ath_types::agent::AgentKind;
+    use ath_types::review::{ReviewVerdict, Severity};
+
+    let (dir, layer) = create_temp_repo();
+
+    // Write 3 files simulating agent output
+    write_file(dir.path(), "src/main.rs", "fn main() {}");
+    write_file(dir.path(), "src/lib.rs", "pub mod core;");
+    write_file(dir.path(), "tests/test.rs", "#[test] fn it_works() {}");
+
+    // Build metadata using from_phase_data
+    let agent = AgentKind::Claude("opus-4".to_string());
+    let verdict = ReviewVerdict {
+        passed: true,
+        reviewer: AgentKind::Gemini("2.5-pro".to_string()),
+        severity: Severity::Info,
+        reason: "All checks passed".to_string(),
+        suggestions: vec![],
+    };
+    let meta = CommitMetadata::from_phase_data(
+        "foundation",
+        &agent,
+        "task-42",
+        3,
+        Some(&verdict),
+    );
+
+    // Stage and commit
+    let result = layer
+        .stage_and_commit(
+            &[
+                dir.path().join("src/main.rs"),
+                dir.path().join("src/lib.rs"),
+                dir.path().join("tests/test.rs"),
+            ],
+            &meta,
+        )
+        .expect("full workflow commit");
+
+    assert!(result.committed, "should have created a commit");
+    assert!(result.oid.is_some());
+
+    // Verify commit metadata
+    let repo = git2::Repository::open(dir.path()).expect("open repo");
+    let commit = repo.find_commit(result.oid.unwrap()).unwrap();
+
+    // Author should be Athena
+    assert_eq!(commit.author().name().unwrap(), "Athena");
+
+    // Message should have all 6 trailers
+    let message = commit.message().unwrap();
+    assert!(message.starts_with("athena: foundation"), "subject line");
+    assert!(message.contains("Phase: foundation"), "Phase trailer");
+    assert!(message.contains("Agent: Anthropic/opus-4"), "Agent trailer");
+    assert!(message.contains("Task-Id: task-42"), "Task-Id trailer");
+    assert!(message.contains("Files-Count: 3"), "Files-Count trailer");
+    assert!(message.contains("Review-Status: passed"), "Review-Status trailer");
+    assert!(message.contains("Reviewer: Google/2.5-pro"), "Reviewer trailer");
+
+    // Walk commit tree: exactly 3 files present
+    let tree = commit.tree().unwrap();
+    let mut file_count = 0;
+    tree.walk(git2::TreeWalkMode::PreOrder, |_, entry| {
+        if entry.kind() == Some(git2::ObjectType::Blob) {
+            file_count += 1;
+        }
+        git2::TreeWalkResult::Ok
+    })
+    .unwrap();
+    assert_eq!(file_count, 3, "commit tree should have exactly 3 files");
+
+    // Call stage_and_commit again with same files (no changes) -- should skip
+    let second = layer
+        .stage_and_commit(
+            &[
+                dir.path().join("src/main.rs"),
+                dir.path().join("src/lib.rs"),
+                dir.path().join("tests/test.rs"),
+            ],
+            &meta,
+        )
+        .expect("second commit attempt");
+
+    assert!(!second.committed, "should skip commit when no changes");
+    assert!(second.oid.is_none(), "no OID for skipped commit");
+}

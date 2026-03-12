@@ -108,6 +108,7 @@ impl GitLayer {
     }
 
     /// Get a clone of the Arc<Mutex<Repository>> for sharing.
+    #[cfg_attr(not(test), allow(dead_code))]
     pub(crate) fn repo_handle(&self) -> Arc<Mutex<Repository>> {
         Arc::clone(&self.repo)
     }
