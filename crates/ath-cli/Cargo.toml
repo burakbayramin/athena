@@ -13,3 +13,4 @@ anyhow.workspace = true
 colored.workspace = true
 ath-types = { path = "../ath-types" }
 ath-config = { path = "../ath-config" }
+ath-planner.workspace = true

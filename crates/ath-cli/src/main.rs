@@ -2,13 +2,12 @@
 //!
 //! CLI entry point for the Athena multi-agent orchestrator.
 
+use std::path::PathBuf;
+
 use anyhow::Result;
 use ath_config::{ConfigError, ConfigStore};
 use colored::Colorize;
 use clap::{Parser, Subcommand};
-
-// Validate ath-types dependency wiring at compile time.
-use ath_types as _;
 
 /// Athena - a multi-agent software orchestrator.
 #[derive(Parser)]
@@ -30,8 +29,14 @@ struct Cli {
 enum Commands {
     /// Conduct a multi-agent run on the current project.
     Run {
-        /// Optional task description for the run.
+        /// Project description in natural language.
         description: Option<String>,
+        /// Path to a markdown spec file.
+        #[arg(long, value_name = "FILE")]
+        spec: Option<PathBuf>,
+        /// Path to an existing codebase to analyze.
+        #[arg(long, value_name = "DIR")]
+        codebase: Option<PathBuf>,
     },
     /// Initialize an ath project in the current directory.
     Init,
@@ -67,11 +72,24 @@ fn run(cli: Cli) -> Result<()> {
     }
 
     match cli.command {
-        Some(Commands::Run { description }) => {
-            if let Some(desc) = &description {
-                println!("Run description: {desc}");
+        Some(Commands::Run { description, spec, codebase }) => {
+            use ath_planner::input::{InputMode, resolve_input_mode};
+            let mode = resolve_input_mode(
+                description.as_deref(),
+                spec.as_deref(),
+                codebase.as_deref(),
+            ).map_err(|e| anyhow::anyhow!("{}", e))?;
+            match &mode {
+                InputMode::NaturalLanguage(desc) => println!("Input: natural language -- {}", desc),
+                InputMode::SpecFile(path) => println!("Input: spec file -- {}", path.display()),
+                InputMode::Codebase { path, intent } => {
+                    println!("Input: codebase -- {}", path.display());
+                    if let Some(i) = intent {
+                        println!("Intent: {}", i);
+                    }
+                }
             }
-            println!("Run not yet implemented.");
+            println!("Input parsing not yet fully implemented.");
         }
         Some(Commands::Init) => {
             println!("Init not yet implemented.");
