@@ -13,7 +13,7 @@ Athena is built infrastructure-first, following the 6-tier dependency order from
 Decimal phases appear between their surrounding integers in numeric order.
 
 - [ ] **Phase 1: Foundation** - Shared types, config loading, and unified error system
-- [ ] **Phase 2: Agent Clients** - Claude, Gemini, and Codex API actors with reliability primitives
+- [x] **Phase 2: Agent Clients** - Claude, Gemini, and Codex API actors with reliability primitives (completed 2026-03-12)
 - [ ] **Phase 3: Git Layer** - In-process git commits with phase and agent metadata
 - [ ] **Phase 4: Input Parsing** - Natural language, spec file, and codebase analysis into ProjectSpec
 - [ ] **Phase 5: Phase Decomposition** - ProjectAnalyzer + PhasePlanner producing validated dependency DAG
@@ -206,7 +206,7 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7 -> 8 -> 9 -> 10
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Foundation | 3/4 | In Progress|  |
-| 2. Agent Clients | 2/3 | In Progress|  |
+| 2. Agent Clients | 3/3 | Complete   | 2026-03-12 |
 | 3. Git Layer | 0/3 | Not started | - |
 | 4. Input Parsing | 0/5 | Not started | - |
 | 5. Phase Decomposition | 0/4 | Not started | - |
