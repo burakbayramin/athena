@@ -9,10 +9,10 @@ serde_json.workspace = true
 thiserror.workspace = true
 async-trait.workspace = true
 tokio = { workspace = true, features = ["sync", "time"] }
+chrono.workspace = true
+uuid.workspace = true
 ath-types = { path = "../ath-types" }
 ath-config = { path = "../ath-config" }
 
 [dev-dependencies]
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "sync", "time", "test-util"] }
-chrono = { workspace = true }
-uuid = { workspace = true }
