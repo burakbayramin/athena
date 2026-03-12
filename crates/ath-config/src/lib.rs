@@ -10,5 +10,9 @@
 //!
 //! Precedence: CLI flags > env vars > project-local > global config
 
+pub mod env;
+pub mod error;
+pub mod file;
+
 // Validate the ath-types dependency is wired correctly.
 use ath_types as _;
