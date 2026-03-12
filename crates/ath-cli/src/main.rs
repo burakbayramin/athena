@@ -76,6 +76,7 @@ async fn run(cli: Cli) -> Result<()> {
         Some(Commands::Run { description, spec, codebase }) => {
             use ath_agents::ClaudeHandle;
             use ath_planner::input::{resolve_input_mode, parse_input, display_project_spec_summary};
+            use ath_planner::decompose::{decompose_project_spec, display_execution_plan};
 
             let mode = resolve_input_mode(
                 description.as_deref(),
@@ -90,6 +91,14 @@ async fn run(cli: Cli) -> Result<()> {
                 .map_err(|e| anyhow::anyhow!("{}", e))?;
 
             display_project_spec_summary(&project_spec);
+
+            let (plan, warnings) = decompose_project_spec(&project_spec, &backend)
+                .await
+                .map_err(|e| anyhow::anyhow!("{}", e))?;
+
+            display_execution_plan(&plan, &warnings);
+
+            println!("{}", "Phase plan ready. Execution not yet implemented (Phase 7).".dimmed());
         }
         Some(Commands::Init) => {
             println!("Init not yet implemented.");
