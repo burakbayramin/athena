@@ -44,7 +44,8 @@ enum Commands {
     Report,
 }
 
-fn main() {
+#[tokio::main]
+async fn main() {
     let cli = Cli::parse();
 
     // Respect --no-color flag and NO_COLOR env var.
@@ -52,13 +53,13 @@ fn main() {
         colored::control::set_override(false);
     }
 
-    if let Err(err) = run(cli) {
+    if let Err(err) = run(cli).await {
         display_error(&err);
         std::process::exit(1);
     }
 }
 
-fn run(cli: Cli) -> Result<()> {
+async fn run(cli: Cli) -> Result<()> {
     let config = match ConfigStore::load() {
         Ok(c) => c,
         Err(e) => {
@@ -73,7 +74,8 @@ fn run(cli: Cli) -> Result<()> {
 
     match cli.command {
         Some(Commands::Run { description, spec, codebase }) => {
-            use ath_planner::input::{resolve_input_mode, display_project_spec_summary};
+            use ath_agents::ClaudeHandle;
+            use ath_planner::input::{resolve_input_mode, parse_input, display_project_spec_summary};
 
             let mode = resolve_input_mode(
                 description.as_deref(),
@@ -81,19 +83,13 @@ fn run(cli: Cli) -> Result<()> {
                 codebase.as_deref(),
             ).map_err(|e| anyhow::anyhow!("{}", e))?;
 
-            println!("Input mode resolved: {:?}", mode);
-            println!("Full LLM parsing requires a configured agent. Pipeline ready for integration.");
+            let backend = ClaudeHandle::new(&config)
+                .map_err(|e| anyhow::anyhow!("{}", e))?;
 
-            // Note: Actually calling parse_input requires an AgentBackend instance.
-            // The agent construction (ConfigStore -> ClaudeHandle) will be wired in
-            // Phase 7 when the full orchestrator pipeline is built. For now, the CLI
-            // demonstrates input mode resolution and the parsing pipeline is tested
-            // via unit tests with MockBackend.
-            //
-            // When wired:
-            //   let spec = parse_input(mode, &backend).await?;
-            //   display_project_spec_summary(&spec);
-            let _ = display_project_spec_summary; // suppress unused import warning
+            let project_spec = parse_input(mode, &backend).await
+                .map_err(|e| anyhow::anyhow!("{}", e))?;
+
+            display_project_spec_summary(&project_spec);
         }
         Some(Commands::Init) => {
             println!("Init not yet implemented.");
