@@ -7,3 +7,4 @@
 //! and parallelization opportunities.
 
 pub mod input;
+pub mod decompose;
