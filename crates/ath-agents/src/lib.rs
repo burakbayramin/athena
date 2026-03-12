@@ -6,6 +6,7 @@
 //! and LLM providers (Anthropic, Google, OpenAI) via a unified
 //! agent abstraction.
 
+pub mod actor;
 pub mod backend;
 pub mod circuit_breaker;
 pub mod error;

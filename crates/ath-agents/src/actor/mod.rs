@@ -1,0 +1,307 @@
+//! Actor infrastructure for LLM provider backends.
+//!
+//! Each provider (Claude, Gemini, Codex) runs as a tokio actor with its own
+//! bounded mpsc channel and circuit breaker. This module provides shared
+//! infrastructure: message types, error classification, client construction,
+//! and retry-with-circuit-breaker logic.
+
+pub mod claude;
+pub mod codex;
+pub mod gemini;
+
+use std::time::Duration;
+
+use ath_config::ConfigStore;
+use ath_types::agent::{AgentRequest, AgentResponse};
+use backon::BackoffBuilder;
+use chrono::Utc;
+use genai::adapter::AdapterKind;
+use genai::chat::ChatRequest;
+use genai::resolver::{AuthData, AuthResolver};
+use tokio::sync::oneshot;
+
+use crate::circuit_breaker::CircuitBreaker;
+use crate::error::AgentError;
+
+// Re-exports are added after handle types are defined in Task 2.
+
+/// Message sent from a handle to its actor via the mpsc channel.
+pub struct ActorMessage {
+    /// The agent request to process.
+    pub request: AgentRequest,
+    /// Channel to send the result back to the caller.
+    pub respond_to: oneshot::Sender<Result<AgentResponse, AgentError>>,
+}
+
+/// Classify a genai error into our normalized AgentError.
+///
+/// Maps HTTP status codes, auth errors, parse errors, and other genai
+/// error variants into the appropriate AgentError variant.
+pub fn classify_error(err: genai::Error, provider: &str) -> AgentError {
+    match &err {
+        // HTTP errors with status codes
+        genai::Error::WebModelCall { webc_error, .. }
+        | genai::Error::WebAdapterCall { webc_error, .. } => {
+            classify_webc_error(webc_error, provider)
+        }
+
+        // Auth-related errors
+        genai::Error::RequiresApiKey { .. }
+        | genai::Error::NoAuthResolver { .. }
+        | genai::Error::NoAuthData { .. } => AgentError::AuthFailed {
+            provider: provider.to_string(),
+            reason: err.to_string(),
+        },
+
+        genai::Error::Resolver {
+            resolver_error, ..
+        } => match resolver_error {
+            genai::resolver::Error::ApiKeyEnvNotFound { .. } => AgentError::AuthFailed {
+                provider: provider.to_string(),
+                reason: err.to_string(),
+            },
+            _ => AgentError::AuthFailed {
+                provider: provider.to_string(),
+                reason: err.to_string(),
+            },
+        },
+
+        // Response parsing errors
+        genai::Error::NoChatResponse { .. }
+        | genai::Error::ChatResponseGeneration { .. }
+        | genai::Error::InvalidJsonResponseElement { .. }
+        | genai::Error::StreamParse { .. }
+        | genai::Error::SerdeJson(_) => AgentError::InvalidResponse {
+            provider: provider.to_string(),
+            reason: err.to_string(),
+        },
+
+        // Everything else
+        _ => AgentError::Unknown {
+            provider: provider.to_string(),
+            message: err.to_string(),
+        },
+    }
+}
+
+/// Classify a webc (HTTP) error into our AgentError.
+fn classify_webc_error(err: &genai::webc::Error, provider: &str) -> AgentError {
+    match err {
+        genai::webc::Error::ResponseFailedStatus { status, .. } => {
+            let code = status.as_u16();
+            match code {
+                429 => AgentError::RateLimit {
+                    provider: provider.to_string(),
+                    // genai does not expose Retry-After headers directly;
+                    // fall back to exponential backoff.
+                    retry_after: None,
+                },
+                401 | 403 => AgentError::AuthFailed {
+                    provider: provider.to_string(),
+                    reason: format!("HTTP {code}"),
+                },
+                408 => AgentError::Timeout {
+                    provider: provider.to_string(),
+                    duration: Duration::from_secs(300),
+                },
+                500..=599 => AgentError::ServerError {
+                    provider: provider.to_string(),
+                    status: code,
+                },
+                _ => AgentError::Unknown {
+                    provider: provider.to_string(),
+                    message: format!("HTTP {code}"),
+                },
+            }
+        }
+        genai::webc::Error::Reqwest(reqwest_err) => {
+            if reqwest_err.is_timeout() {
+                AgentError::Timeout {
+                    provider: provider.to_string(),
+                    duration: Duration::from_secs(300),
+                }
+            } else if reqwest_err.is_connect() {
+                AgentError::ServerError {
+                    provider: provider.to_string(),
+                    status: 503,
+                }
+            } else {
+                AgentError::Unknown {
+                    provider: provider.to_string(),
+                    message: reqwest_err.to_string(),
+                }
+            }
+        }
+        _ => AgentError::InvalidResponse {
+            provider: provider.to_string(),
+            reason: err.to_string(),
+        },
+    }
+}
+
+/// Build a genai Client with API keys from ConfigStore injected via AuthResolver.
+pub fn build_genai_client(config: &ConfigStore) -> Result<genai::Client, AgentError> {
+    let anthropic_key = config.anthropic_api_key.clone();
+    let google_key = config.google_api_key.clone();
+    let openai_key = config.openai_api_key.clone();
+
+    let auth_resolver = AuthResolver::from_resolver_fn(
+        move |model_iden: genai::ModelIden| -> genai::resolver::Result<Option<AuthData>> {
+            let key = match model_iden.adapter_kind {
+                AdapterKind::Anthropic => anthropic_key.clone(),
+                AdapterKind::Gemini => google_key.clone(),
+                AdapterKind::OpenAI | AdapterKind::OpenAIResp => openai_key.clone(),
+                // For any other adapter kind, try openai key as fallback
+                _ => openai_key.clone(),
+            };
+
+            match key {
+                Some(k) => Ok(Some(AuthData::from_single(k))),
+                None => Err(genai::resolver::Error::Custom(format!(
+                    "No API key configured for adapter {:?}",
+                    model_iden.adapter_kind
+                ))),
+            }
+        },
+    );
+
+    let client = genai::Client::builder()
+        .with_auth_resolver(auth_resolver)
+        .build();
+
+    Ok(client)
+}
+
+/// Call a provider via genai, returning content and token counts.
+///
+/// Builds a ChatRequest from prompt + optional context and sends it through
+/// the genai client.
+pub async fn call_provider(
+    client: &genai::Client,
+    model: &str,
+    prompt: &str,
+    context: Option<&str>,
+    provider: &str,
+) -> Result<(String, u64, u64), AgentError> {
+    let mut chat_req = ChatRequest::from_user(prompt);
+    if let Some(ctx) = context {
+        chat_req = chat_req.with_system(ctx);
+    }
+
+    let response = client
+        .exec_chat(model, chat_req, None)
+        .await
+        .map_err(|e| classify_error(e, provider))?;
+
+    let input_tokens = response.usage.prompt_tokens.unwrap_or(0) as u64;
+    let output_tokens = response.usage.completion_tokens.unwrap_or(0) as u64;
+
+    let content = response.into_first_text().unwrap_or_default();
+
+    Ok((content, input_tokens, output_tokens))
+}
+
+/// Run a provider call with retry logic and circuit breaker integration.
+///
+/// - Checks circuit breaker before each attempt.
+/// - Retries up to 3 times for retryable errors.
+/// - Honors Retry-After duration from RateLimit errors when present.
+/// - Falls back to exponential backoff (1s base, 2x, 60s cap, jitter) otherwise.
+/// - Non-retryable errors abort immediately.
+/// - Wraps the entire sequence in a 5-minute timeout.
+pub async fn run_with_retry_and_breaker(
+    client: &genai::Client,
+    model: &str,
+    request: &AgentRequest,
+    circuit_breaker: &mut CircuitBreaker,
+    provider: &str,
+) -> Result<AgentResponse, AgentError> {
+    if !circuit_breaker.can_attempt() {
+        return Err(AgentError::CircuitOpen {
+            provider: provider.to_string(),
+        });
+    }
+
+    let timeout_duration = Duration::from_secs(300); // 5 minutes
+
+    let result = tokio::time::timeout(timeout_duration, async {
+        // Build the exponential backoff iterator for fallback delays
+        let backoff = backon::ExponentialBuilder::default()
+            .with_jitter()
+            .build();
+        let mut backoff_iter = backoff.into_iter();
+
+        let max_attempts = 3;
+        let mut last_error: Option<AgentError> = None;
+
+        for attempt in 0..max_attempts {
+            let call_result = call_provider(
+                client,
+                model,
+                &request.prompt,
+                request.context.as_deref(),
+                provider,
+            )
+            .await;
+
+            match call_result {
+                Ok((content, input_tokens, output_tokens)) => {
+                    circuit_breaker.record_success();
+                    return Ok(AgentResponse {
+                        request_id: request.id,
+                        agent: request.agent.clone(),
+                        content,
+                        input_tokens,
+                        output_tokens,
+                        created_at: Utc::now(),
+                    });
+                }
+                Err(e) => {
+                    if !e.is_retryable() {
+                        circuit_breaker.record_failure();
+                        return Err(e);
+                    }
+
+                    // Determine delay: honor Retry-After from RateLimit if present
+                    let delay = if let AgentError::RateLimit {
+                        retry_after: Some(duration),
+                        ..
+                    } = &e
+                    {
+                        *duration
+                    } else {
+                        backoff_iter
+                            .next()
+                            .unwrap_or(Duration::from_secs(60))
+                    };
+
+                    last_error = Some(e);
+
+                    // Don't sleep after the last attempt
+                    if attempt < max_attempts - 1 {
+                        tokio::time::sleep(delay).await;
+                    }
+                }
+            }
+        }
+
+        // All attempts exhausted
+        circuit_breaker.record_failure();
+        Err(last_error.unwrap_or_else(|| AgentError::Unknown {
+            provider: provider.to_string(),
+            message: "all retry attempts exhausted".to_string(),
+        }))
+    })
+    .await;
+
+    match result {
+        Ok(inner_result) => inner_result,
+        Err(_elapsed) => {
+            circuit_breaker.record_failure();
+            Err(AgentError::Timeout {
+                provider: provider.to_string(),
+                duration: timeout_duration,
+            })
+        }
+    }
+}
