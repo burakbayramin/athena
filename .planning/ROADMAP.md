@@ -68,12 +68,12 @@ Plans:
   2. The commit message includes phase name, agent responsible, and task identifier
   3. Running `git log` on the target repo shows one commit per executed phase — no extra or missing commits
   4. GitLayer works in a repository with no prior commits (initial commit case) without panicking
-**Plans**: TBD
+**Plans**: 3 plans
 
 Plans:
-- [ ] 03-01: GitLayer struct — git2 Repository management with spawn_blocking guard
-- [ ] 03-02: Stage, commit, and metadata embedding for per-phase commits
-- [ ] 03-03: Edge case handling — initial commit, empty diff, merge conflict detection
+- [ ] 03-01-PLAN.md — Workspace deps (git2, tempfile), GitError enum, CommitMetadata with trailer builder, GitLayer struct with repo open/init and dirty tree check
+- [ ] 03-02-PLAN.md — stage_and_commit method with explicit file staging, initial commit handling, empty diff detection, and integration tests
+- [ ] 03-03-PLAN.md — AsyncGitLayer spawn_blocking wrapper, file deletion staging, edge case tests, final success criteria audit
 
 ### Phase 4: Input Parsing
 **Goal**: Athena accepts a project description in natural language, as a spec file, or as a pointer to an existing codebase, and produces a normalized ProjectSpec in all three cases
