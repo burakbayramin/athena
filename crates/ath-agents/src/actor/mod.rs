@@ -177,21 +177,30 @@ pub fn build_genai_client(config: &ConfigStore) -> Result<genai::Client, AgentEr
 /// Call a provider via genai, returning content and token counts.
 ///
 /// Builds a ChatRequest from prompt + optional context and sends it through
-/// the genai client.
+/// the genai client. When `json_schema` is provided, uses genai's JsonSpec
+/// response format for provider-native structured output enforcement.
 pub async fn call_provider(
     client: &genai::Client,
     model: &str,
     prompt: &str,
     context: Option<&str>,
+    json_schema: Option<&serde_json::Value>,
     provider: &str,
 ) -> Result<(String, u64, u64), AgentError> {
+    use genai::chat::{ChatOptions, ChatResponseFormat, JsonSpec};
+
     let mut chat_req = ChatRequest::from_user(prompt);
     if let Some(ctx) = context {
         chat_req = chat_req.with_system(ctx);
     }
 
+    let options = json_schema.map(|schema| {
+        let spec = JsonSpec::new("structured_output", schema.clone());
+        ChatOptions::default().with_response_format(ChatResponseFormat::JsonSpec(spec))
+    });
+
     let response = client
-        .exec_chat(model, chat_req, None)
+        .exec_chat(model, chat_req, options.as_ref())
         .await
         .map_err(|e| classify_error(e, provider))?;
 
@@ -242,6 +251,7 @@ pub async fn run_with_retry_and_breaker(
                 model,
                 &request.prompt,
                 request.context.as_deref(),
+                request.json_schema.as_ref(),
                 provider,
             )
             .await;
