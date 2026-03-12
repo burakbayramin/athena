@@ -11,4 +11,4 @@ pub mod layer;
 
 pub use commit::{build_commit_message, CommitMetadata};
 pub use error::GitError;
-pub use layer::GitLayer;
+pub use layer::{CommitResult, GitLayer};
