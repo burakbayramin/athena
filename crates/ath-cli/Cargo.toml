@@ -1,0 +1,15 @@
+[package]
+name = "ath-cli"
+version.workspace = true
+edition.workspace = true
+
+[[bin]]
+name = "ath"
+path = "src/main.rs"
+
+[dependencies]
+clap.workspace = true
+anyhow.workspace = true
+colored.workspace = true
+ath-types = { path = "../ath-types" }
+ath-config = { path = "../ath-config" }

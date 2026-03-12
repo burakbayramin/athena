@@ -1,0 +1,7 @@
+[package]
+name = "ath-orchestrator"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+ath-types = { path = "../ath-types" }

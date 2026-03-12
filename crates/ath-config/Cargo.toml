@@ -1,0 +1,12 @@
+[package]
+name = "ath-config"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+serde.workspace = true
+toml.workspace = true
+dotenvy.workspace = true
+dirs.workspace = true
+thiserror.workspace = true
+ath-types = { path = "../ath-types" }
