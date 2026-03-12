@@ -1,0 +1,106 @@
+# Requirements: Athena
+
+**Defined:** 2026-03-12
+**Core Value:** Intelligent phase analysis — breaking any software project into well-structured, dependency-aware phases with correct agent assignments and parallelization
+
+## v1 Requirements
+
+### Input
+
+- [ ] **INPT-01**: User can describe a project in natural language and Athena parses it into structured intent
+- [ ] **INPT-02**: User can provide a spec file (markdown/structured document) as project input
+- [ ] **INPT-03**: User can point Athena at an existing codebase to analyze and determine next steps
+- [ ] **INPT-04**: User can configure API keys via environment variables or config file
+
+### Phase Analysis
+
+- [ ] **PLAN-01**: Athena decomposes project input into ordered phases with named tasks
+- [ ] **PLAN-02**: Athena automatically infers dependency DAG between phases and tasks
+- [ ] **PLAN-03**: Athena identifies which phases can run in parallel vs must be sequential
+- [ ] **PLAN-04**: Athena defines typed JSON schemas for inter-agent communication at every boundary
+- [ ] **PLAN-05**: User can dry-run to see the full plan without executing (no API cost)
+
+### Agent Orchestration
+
+- [ ] **ORCH-01**: Athena assigns named agent roles (Claude: architecture/logic, Gemini: research/APIs, Codex: code generation)
+- [ ] **ORCH-02**: Athena routes tasks to agents based on a skill taxonomy matching task requirements to model strengths
+- [ ] **ORCH-03**: Each agent operates on isolated modules with strict file ownership — no shared edits
+- [ ] **ORCH-04**: Independent phases execute in parallel across agents simultaneously
+- [ ] **ORCH-05**: Athena calls Claude, Gemini, and Codex APIs autonomously to execute assigned tasks
+
+### Quality & Review
+
+- [ ] **QUAL-01**: Each phase output is cross-reviewed by a different AI agent (not the author)
+- [ ] **QUAL-02**: Review gate blocks phase progression until review passes
+- [ ] **QUAL-03**: On review failure, Athena auto-retries with reviewer feedback (max 3 attempts)
+- [ ] **QUAL-04**: Athena tracks and reports token usage and estimated cost per phase per agent
+
+### Output
+
+- [ ] **OUTP-01**: Athena commits generated code to local git repo after each phase with phase/agent metadata
+- [ ] **OUTP-02**: Terminal shows real-time progress: current phase, active agent, task status
+- [ ] **OUTP-03**: Athena produces structured final report: phase table, agent assignments, review outcomes
+- [ ] **OUTP-04**: Error messages include actionable context distinguishing API errors, review failures, and schema violations
+
+## v2 Requirements
+
+### Resilience
+
+- **RESL-01**: Athena can resume interrupted execution from the last completed phase
+- **RESL-02**: Persistent checkpoint state survives crashes and API timeouts
+
+### Extensibility
+
+- **EXTD-01**: Plugin system for custom agent definitions
+- **EXTD-02**: Support for local/self-hosted models (Ollama, etc.)
+
+### Input Formats
+
+- **INPF-01**: Structured spec-driven input format (requirements.md / design.md / tasks.md)
+
+## Out of Scope
+
+| Feature | Reason |
+|---------|--------|
+| Web dashboard / visual UI | CLI-only for v1; massive scope expansion |
+| Built-in API key management | SaaS feature; creates liability; user provides own keys |
+| PR creation / GitHub integration | Out of scope; user pushes and opens PR themselves |
+| Multi-user / team collaboration | Requires server, shared state, auth — different product |
+| Human-in-the-loop at every step | Destroys autonomous value prop; HITL only at plan review |
+| Real-time agent conversation visibility (default) | Too noisy; available via --verbose flag |
+
+## Traceability
+
+| Requirement | Phase | Status |
+|-------------|-------|--------|
+| INPT-01 | — | Pending |
+| INPT-02 | — | Pending |
+| INPT-03 | — | Pending |
+| INPT-04 | — | Pending |
+| PLAN-01 | — | Pending |
+| PLAN-02 | — | Pending |
+| PLAN-03 | — | Pending |
+| PLAN-04 | — | Pending |
+| PLAN-05 | — | Pending |
+| ORCH-01 | — | Pending |
+| ORCH-02 | — | Pending |
+| ORCH-03 | — | Pending |
+| ORCH-04 | — | Pending |
+| ORCH-05 | — | Pending |
+| QUAL-01 | — | Pending |
+| QUAL-02 | — | Pending |
+| QUAL-03 | — | Pending |
+| QUAL-04 | — | Pending |
+| OUTP-01 | — | Pending |
+| OUTP-02 | — | Pending |
+| OUTP-03 | — | Pending |
+| OUTP-04 | — | Pending |
+
+**Coverage:**
+- v1 requirements: 22 total
+- Mapped to phases: 0
+- Unmapped: 22 ⚠️
+
+---
+*Requirements defined: 2026-03-12*
+*Last updated: 2026-03-12 after initial definition*
