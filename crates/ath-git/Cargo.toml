@@ -4,4 +4,9 @@ version.workspace = true
 edition.workspace = true
 
 [dependencies]
-ath-types = { path = "../ath-types" }
+ath-types = { workspace = true }
+git2 = { workspace = true }
+thiserror = { workspace = true }
+
+[dev-dependencies]
+tempfile = { workspace = true }
