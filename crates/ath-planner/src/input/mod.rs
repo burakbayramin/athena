@@ -4,6 +4,7 @@
 //! natural language description, spec file, or existing codebase.
 //! Provides LLM-based parsing with retry logic for all input modes.
 
+pub mod codebase;
 pub mod error;
 pub mod prompt;
 pub mod spec_file;
