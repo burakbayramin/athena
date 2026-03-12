@@ -18,3 +18,4 @@ backon.workspace = true
 
 [dev-dependencies]
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "sync", "time", "test-util"] }
+reqwest = "0.13"

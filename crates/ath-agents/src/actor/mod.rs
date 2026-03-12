@@ -23,7 +23,9 @@ use tokio::sync::oneshot;
 use crate::circuit_breaker::CircuitBreaker;
 use crate::error::AgentError;
 
-// Re-exports are added after handle types are defined in Task 2.
+pub use claude::ClaudeHandle;
+pub use codex::CodexHandle;
+pub use gemini::GeminiHandle;
 
 /// Message sent from a handle to its actor via the mpsc channel.
 pub struct ActorMessage {
@@ -303,5 +305,125 @@ pub async fn run_with_retry_and_breaker(
                 duration: timeout_duration,
             })
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn classify_error_requires_api_key() {
+        let model_iden = genai::ModelIden::new(AdapterKind::Anthropic, "claude-opus-4");
+        let err = genai::Error::RequiresApiKey { model_iden };
+        let agent_err = classify_error(err, "claude");
+        assert!(
+            matches!(agent_err, AgentError::AuthFailed { ref provider, .. } if provider == "claude"),
+            "expected AuthFailed, got: {agent_err:?}"
+        );
+        assert!(!agent_err.is_retryable());
+    }
+
+    #[test]
+    fn classify_error_no_auth_data() {
+        let model_iden = genai::ModelIden::new(AdapterKind::Gemini, "gemini-2.5-pro");
+        let err = genai::Error::NoAuthData { model_iden };
+        let agent_err = classify_error(err, "gemini");
+        assert!(
+            matches!(agent_err, AgentError::AuthFailed { .. }),
+            "expected AuthFailed, got: {agent_err:?}"
+        );
+    }
+
+    #[test]
+    fn classify_error_no_chat_response() {
+        let model_iden = genai::ModelIden::new(AdapterKind::OpenAI, "o3");
+        let err = genai::Error::NoChatResponse { model_iden };
+        let agent_err = classify_error(err, "codex");
+        assert!(
+            matches!(agent_err, AgentError::InvalidResponse { ref provider, .. } if provider == "codex"),
+            "expected InvalidResponse, got: {agent_err:?}"
+        );
+        assert!(agent_err.is_retryable());
+    }
+
+    #[test]
+    fn classify_error_serde_json() {
+        let serde_err: serde_json::Error = serde_json::from_str::<String>("not-json").unwrap_err();
+        let err = genai::Error::SerdeJson(serde_err);
+        let agent_err = classify_error(err, "test");
+        assert!(
+            matches!(agent_err, AgentError::InvalidResponse { .. }),
+            "expected InvalidResponse, got: {agent_err:?}"
+        );
+    }
+
+    #[test]
+    fn classify_error_internal_is_unknown() {
+        let err = genai::Error::Internal("something broke".to_string());
+        let agent_err = classify_error(err, "test");
+        assert!(
+            matches!(agent_err, AgentError::Unknown { ref provider, .. } if provider == "test"),
+            "expected Unknown, got: {agent_err:?}"
+        );
+    }
+
+    #[test]
+    fn classify_webc_429_is_rate_limit() {
+        let webc_err = genai::webc::Error::ResponseFailedStatus {
+            status: reqwest::StatusCode::TOO_MANY_REQUESTS,
+            body: "rate limited".to_string(),
+            headers: Box::new(reqwest::header::HeaderMap::new()),
+        };
+        let agent_err = classify_webc_error(&webc_err, "test");
+        assert!(
+            matches!(agent_err, AgentError::RateLimit { ref provider, .. } if provider == "test"),
+            "expected RateLimit, got: {agent_err:?}"
+        );
+        assert!(agent_err.is_retryable());
+    }
+
+    #[test]
+    fn classify_webc_401_is_auth_failed() {
+        let webc_err = genai::webc::Error::ResponseFailedStatus {
+            status: reqwest::StatusCode::UNAUTHORIZED,
+            body: "unauthorized".to_string(),
+            headers: Box::new(reqwest::header::HeaderMap::new()),
+        };
+        let agent_err = classify_webc_error(&webc_err, "claude");
+        assert!(
+            matches!(agent_err, AgentError::AuthFailed { .. }),
+            "expected AuthFailed, got: {agent_err:?}"
+        );
+        assert!(!agent_err.is_retryable());
+    }
+
+    #[test]
+    fn classify_webc_500_is_server_error() {
+        let webc_err = genai::webc::Error::ResponseFailedStatus {
+            status: reqwest::StatusCode::INTERNAL_SERVER_ERROR,
+            body: "server error".to_string(),
+            headers: Box::new(reqwest::header::HeaderMap::new()),
+        };
+        let agent_err = classify_webc_error(&webc_err, "gemini");
+        assert!(
+            matches!(agent_err, AgentError::ServerError { ref provider, status: 500, .. } if provider == "gemini"),
+            "expected ServerError 500, got: {agent_err:?}"
+        );
+        assert!(agent_err.is_retryable());
+    }
+
+    #[test]
+    fn classify_webc_503_is_server_error() {
+        let webc_err = genai::webc::Error::ResponseFailedStatus {
+            status: reqwest::StatusCode::SERVICE_UNAVAILABLE,
+            body: "service unavailable".to_string(),
+            headers: Box::new(reqwest::header::HeaderMap::new()),
+        };
+        let agent_err = classify_webc_error(&webc_err, "codex");
+        assert!(
+            matches!(agent_err, AgentError::ServerError { status: 503, .. }),
+            "expected ServerError 503, got: {agent_err:?}"
+        );
     }
 }
