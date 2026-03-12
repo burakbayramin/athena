@@ -26,7 +26,7 @@
 - [ ] **ORCH-02**: Athena routes tasks to agents based on a skill taxonomy matching task requirements to model strengths
 - [ ] **ORCH-03**: Each agent operates on isolated modules with strict file ownership — no shared edits
 - [ ] **ORCH-04**: Independent phases execute in parallel across agents simultaneously
-- [ ] **ORCH-05**: Athena calls Claude, Gemini, and Codex APIs autonomously to execute assigned tasks
+- [x] **ORCH-05**: Athena calls Claude, Gemini, and Codex APIs autonomously to execute assigned tasks
 
 ### Quality & Review
 
@@ -86,7 +86,7 @@
 | ORCH-02 | Phase 6 | Pending |
 | ORCH-03 | Phase 6 | Pending |
 | ORCH-04 | Phase 10 | Pending |
-| ORCH-05 | Phase 2 | Pending |
+| ORCH-05 | Phase 2 | Complete |
 | QUAL-01 | Phase 7 | Pending |
 | QUAL-02 | Phase 7 | Pending |
 | QUAL-03 | Phase 7 | Pending |
