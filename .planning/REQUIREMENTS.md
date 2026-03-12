@@ -7,9 +7,9 @@
 
 ### Input
 
-- [ ] **INPT-01**: User can describe a project in natural language and Athena parses it into structured intent
-- [ ] **INPT-02**: User can provide a spec file (markdown/structured document) as project input
-- [ ] **INPT-03**: User can point Athena at an existing codebase to analyze and determine next steps
+- [x] **INPT-01**: User can describe a project in natural language and Athena parses it into structured intent
+- [x] **INPT-02**: User can provide a spec file (markdown/structured document) as project input
+- [x] **INPT-03**: User can point Athena at an existing codebase to analyze and determine next steps
 - [x] **INPT-04**: User can configure API keys via environment variables or config file
 
 ### Phase Analysis
@@ -73,9 +73,9 @@
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| INPT-01 | Phase 4 | Pending |
-| INPT-02 | Phase 4 | Pending |
-| INPT-03 | Phase 4 | Pending |
+| INPT-01 | Phase 4 | Complete |
+| INPT-02 | Phase 4 | Complete |
+| INPT-03 | Phase 4 | Complete |
 | INPT-04 | Phase 1 | Complete |
 | PLAN-01 | Phase 5 | Pending |
 | PLAN-02 | Phase 5 | Pending |
