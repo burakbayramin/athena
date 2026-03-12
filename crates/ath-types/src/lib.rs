@@ -8,11 +8,17 @@
 //! - Inter-agent request/response schemas
 //! - Review verdicts and severity levels
 //! - Phase records and audit trails
-//! - Unified error types
+//! - Unified validation error types
 
-// Module declarations — implementations will be added in Plan 01-04 (typed schemas)
-// pub mod agent;
-// pub mod project;
-// pub mod review;
-// pub mod phase;
-// pub mod error;
+pub mod error;
+pub mod agent;
+pub mod project;
+pub mod review;
+pub mod phase;
+
+// Re-export key types at crate root for ergonomic imports
+pub use error::ValidationError;
+pub use agent::{AgentKind, AgentRequest, AgentResponse};
+pub use project::{ProjectSpec, GoalSpec, SkillTag};
+pub use review::{ReviewVerdict, Severity, CodeSuggestion};
+pub use phase::{PhaseRecord, ReviewAttempt, TokenUsage, AgentContribution};
