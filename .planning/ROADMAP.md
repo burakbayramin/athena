@@ -84,12 +84,13 @@ Plans:
   2. User can run `ath run --spec ./spec.md` and Athena parses the markdown file into the same ProjectSpec structure
   3. User can run `ath run --codebase ./my-project` and Athena analyzes the existing files and produces a ProjectSpec describing next-step goals
   4. All three input modes produce a ProjectSpec that passes serde deserialization — malformed LLM output is caught with an actionable error, not a panic
-**Plans**: 3 plans
+**Plans**: 4 plans
 
 Plans:
 - [ ] 04-01-PLAN.md — InputMode enum, InputError type, AgentRequest json_schema extension, CLI --spec and --codebase flags
 - [ ] 04-02-PLAN.md — LLM prompt templates, spec file reader, parse_to_project_spec with retry-on-validation, call_provider JsonSpec threading
 - [ ] 04-03-PLAN.md — Codebase scanner with gitignore-aware traversal, full pipeline wiring through CLI, ProjectSpec summary display
+- [ ] 04-04-PLAN.md — Gap closure: Wire ClaudeHandle and parse_input through CLI Run command for end-to-end ProjectSpec production
 
 ### Phase 5: Phase Decomposition
 **Goal**: Given a ProjectSpec, Athena decomposes it into an ordered, dependency-validated phase plan with parallelism flags — and can catch structural errors (circular deps, missing contracts) before any API call is made
