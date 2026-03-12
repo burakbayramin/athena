@@ -26,6 +26,7 @@ pub struct CommitResult {
 ///
 /// Opened once via `new()` and reused for the lifetime of the struct.
 /// The `Arc<Mutex<Repository>>` enables safe sharing across `spawn_blocking` calls.
+#[derive(Clone)]
 pub struct GitLayer {
     repo: Arc<Mutex<Repository>>,
     repo_path: PathBuf,
