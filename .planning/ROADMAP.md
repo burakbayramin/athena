@@ -52,14 +52,12 @@ Plans:
   3. Athena can send a prompt to Codex and receive a structured response without manual intervention
   4. A 429 or 500 error triggers exponential backoff (1s to 60s cap) and retries automatically — it does not surface to the user as an unhandled error
   5. After 3 consecutive failures on one provider, the circuit breaker trips and reports which provider is unavailable
-**Plans**: TBD
+**Plans**: 3 plans
 
 Plans:
-- [ ] 02-01: AgentBackend trait definition and mock implementation for testing
-- [ ] 02-02: ClaudeActor — tokio actor with mpsc channels, genai integration, backoff, circuit breaker
-- [ ] 02-03: GeminiActor — tokio actor with provider-specific JSON mode validation
-- [ ] 02-04: CodexActor — tokio actor for OpenAI/Codex endpoint
-- [ ] 02-05: Actor integration tests — round-trip prompt/response for all three providers
+- [ ] 02-01-PLAN.md — AgentError enum, CircuitBreaker state machine, AgentBackend trait, MockBackend test double
+- [ ] 02-02-PLAN.md — Workspace deps (genai, backon), shared actor infrastructure, Claude/Gemini/Codex actor implementations
+- [ ] 02-03-PLAN.md — Integration tests for full agent layer, human verification checkpoint
 
 ### Phase 3: Git Layer
 **Goal**: Athena can commit generated code to a local git repository after each phase, with per-phase metadata in commit messages, using in-process git2 without a system dependency
@@ -208,7 +206,7 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7 -> 8 -> 9 -> 10
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Foundation | 3/4 | In Progress|  |
-| 2. Agent Clients | 0/5 | Not started | - |
+| 2. Agent Clients | 0/3 | Not started | - |
 | 3. Git Layer | 0/3 | Not started | - |
 | 4. Input Parsing | 0/5 | Not started | - |
 | 5. Phase Decomposition | 0/4 | Not started | - |
