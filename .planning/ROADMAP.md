@@ -101,13 +101,12 @@ Plans:
   2. The dependency graph passes structural validation — circular dependencies are detected and reported with the cycle path, not silently ignored
   3. Phases that have no dependency on each other are flagged as parallel-eligible in the plan output
   4. Running `ath run --dry-run` on any project prints the full phase plan with dependency table — without making any LLM or git call
-**Plans**: TBD
+**Plans**: 3 plans
 
 Plans:
-- [ ] 05-01: PhasePlanner — DAG construction via LLM call with structured output enforcement
-- [ ] 05-02: Topological sort and parallelism flag assignment
-- [ ] 05-03: Structural validator — circular dependency detection, contracts-before-consumers check
-- [ ] 05-04: Dry-run projection — plan display without execution (wired to PLAN-05)
+- [ ] 05-01-PLAN.md — Plan types (ExecutionPlan, PhaseSpec, TaskSpec), DAG algorithms (topological sort, parallelism groups, critical path), DecomposeError, ValidationError DAG variants
+- [ ] 05-02-PLAN.md — DAG validation (cycles, orphans, contracts, empty phases), LLM decomposition prompt with JSON schema, decompose_project_spec retry loop
+- [ ] 05-03-PLAN.md — Execution plan display formatter, CLI pipeline wiring (parse_input -> decompose -> display)
 
 ### Phase 6: Module Isolation
 **Goal**: Athena enforces strict file ownership per agent — no two agents can be assigned overlapping files in the same phase — and routes tasks to agents using a skill taxonomy
@@ -208,7 +207,7 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7 -> 8 -> 9 -> 10
 | 2. Agent Clients | 3/3 | Complete   | 2026-03-12 |
 | 3. Git Layer | 1/3 | In Progress|  |
 | 4. Input Parsing | 1/3 | In Progress|  |
-| 5. Phase Decomposition | 0/4 | Not started | - |
+| 5. Phase Decomposition | 0/3 | Not started | - |
 | 6. Module Isolation | 0/4 | Not started | - |
 | 7. Phase Runner and Review | 0/5 | Not started | - |
 | 8. CLI and Progress | 0/4 | Not started | - |
