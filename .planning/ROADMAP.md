@@ -37,7 +37,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 **Plans**: 4 plans
 
 Plans:
-- [ ] 01-01-PLAN.md — Cargo workspace scaffold, all 7 ath-* crate stubs, workspace-level dependency management
+- [x] 01-01-PLAN.md — Cargo workspace scaffold, all 7 ath-* crate stubs, workspace-level dependency management
 - [ ] 01-02-PLAN.md — ath-types: error hierarchy + all inter-agent schemas (ProjectSpec, AgentRequest, AgentResponse, ReviewVerdict, PhaseRecord) with validation and round-trip tests
 - [ ] 01-03-PLAN.md — ath-config: ConfigStore with layered TOML/env loading, precedence merge, graceful degradation
 - [ ] 01-04-PLAN.md — ath-cli: binary wiring with config load, provider status, error display formatting
@@ -207,7 +207,7 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7 -> 8 -> 9 -> 10
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Foundation | 0/4 | Not started | - |
+| 1. Foundation | 1/4 | In progress | - |
 | 2. Agent Clients | 0/5 | Not started | - |
 | 3. Git Layer | 0/3 | Not started | - |
 | 4. Input Parsing | 0/5 | Not started | - |
