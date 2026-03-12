@@ -38,20 +38,20 @@ created: 2026-03-12
 
 | Task ID | Plan | Wave | Requirement | Test Type | Automated Command | File Exists | Status |
 |---------|------|------|-------------|-----------|-------------------|-------------|--------|
-| 05-01-01 | 01 | 1 | PLAN-01 | unit | `cargo test -p ath-planner decompose::tests::decompose_produces_phases_with_tasks` | ❌ W0 | ⬜ pending |
-| 05-01-02 | 01 | 1 | PLAN-01 | unit | `cargo test -p ath-planner decompose::tests::decompose_retries_on_invalid_json` | ❌ W0 | ⬜ pending |
-| 05-01-03 | 01 | 1 | PLAN-01 | unit | `cargo test -p ath-planner decompose::tests::decompose_retries_on_validation_error` | ❌ W0 | ⬜ pending |
-| 05-02-01 | 02 | 1 | PLAN-02 | unit | `cargo test -p ath-planner decompose::dag::tests::topological_sort_linear` | ❌ W0 | ⬜ pending |
-| 05-02-02 | 02 | 1 | PLAN-03 | unit | `cargo test -p ath-planner decompose::dag::tests::parallel_groups_computed` | ❌ W0 | ⬜ pending |
-| 05-02-03 | 02 | 1 | PLAN-03 | unit | `cargo test -p ath-planner decompose::dag::tests::critical_path_computed` | ❌ W0 | ⬜ pending |
-| 05-03-01 | 03 | 2 | PLAN-02 | unit | `cargo test -p ath-planner decompose::validate::tests::circular_dependency_detected` | ❌ W0 | ⬜ pending |
-| 05-03-02 | 03 | 2 | PLAN-02 | unit | `cargo test -p ath-planner decompose::validate::tests::missing_dep_target` | ❌ W0 | ⬜ pending |
-| 05-03-03 | 03 | 2 | PLAN-02 | unit | `cargo test -p ath-planner decompose::validate::tests::orphaned_goal_detected` | ❌ W0 | ⬜ pending |
-| 05-03-04 | 03 | 2 | PLAN-02 | unit | `cargo test -p ath-planner decompose::validate::tests::empty_phase_detected` | ❌ W0 | ⬜ pending |
-| 05-03-05 | 03 | 2 | PLAN-02 | unit | `cargo test -p ath-planner decompose::validate::tests::unsatisfied_contract` | ❌ W0 | ⬜ pending |
-| 05-04-01 | 04 | 2 | PLAN-05 | unit | `cargo test -p ath-planner decompose::display::tests::dry_run_output` | ❌ W0 | ⬜ pending |
+| 05-01-01 | 01 | 1 | PLAN-02 | unit | `cargo test -p ath-planner decompose::dag::tests::topological_sort_linear` | No W0 | pending |
+| 05-01-02 | 01 | 1 | PLAN-03 | unit | `cargo test -p ath-planner decompose::dag::tests::parallel_groups_computed` | No W0 | pending |
+| 05-01-03 | 01 | 1 | PLAN-03 | unit | `cargo test -p ath-planner decompose::dag::tests::critical_path_computed` | No W0 | pending |
+| 05-02-01 | 02 | 2 | PLAN-02 | unit | `cargo test -p ath-planner decompose::validate::tests::circular_dependency_detected` | No W0 | pending |
+| 05-02-02 | 02 | 2 | PLAN-02 | unit | `cargo test -p ath-planner decompose::validate::tests::missing_dep_target` | No W0 | pending |
+| 05-02-03 | 02 | 2 | PLAN-02 | unit | `cargo test -p ath-planner decompose::validate::tests::orphaned_goal_detected` | No W0 | pending |
+| 05-02-04 | 02 | 2 | PLAN-02 | unit | `cargo test -p ath-planner decompose::validate::tests::empty_phase_detected` | No W0 | pending |
+| 05-02-05 | 02 | 2 | PLAN-02 | unit | `cargo test -p ath-planner decompose::validate::tests::unsatisfied_contract` | No W0 | pending |
+| 05-02-06 | 02 | 2 | PLAN-01 | unit | `cargo test -p ath-planner decompose::tests::decompose_produces_phases_with_tasks` | No W0 | pending |
+| 05-02-07 | 02 | 2 | PLAN-01 | unit | `cargo test -p ath-planner decompose::tests::decompose_retries_on_invalid_json` | No W0 | pending |
+| 05-02-08 | 02 | 2 | PLAN-01 | unit | `cargo test -p ath-planner decompose::tests::decompose_retries_on_validation_error` | No W0 | pending |
+| 05-03-01 | 03 | 3 | PLAN-01 | unit | `cargo test -p ath-planner decompose::display::tests::display_contains_phase_info` | No W0 | pending |
 
-*Status: ⬜ pending · ✅ green · ❌ red · ⚠️ flaky*
+*Status: pending / green / red / flaky*
 
 ---
 
@@ -68,9 +68,7 @@ created: 2026-03-12
 
 ## Manual-Only Verifications
 
-| Behavior | Requirement | Why Manual | Test Instructions |
-|----------|-------------|------------|-------------------|
-| Dry-run CLI output formatting | PLAN-05 | Visual output formatting | Run `ath run --dry-run "build a todo app"` and verify table is readable |
+*None for Phase 5. Dry-run CLI output formatting is deferred to Phase 8 (PLAN-05 scope).*
 
 ---
 

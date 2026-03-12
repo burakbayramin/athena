@@ -100,8 +100,9 @@ Plans:
   1. For a given ProjectSpec, Athena produces a phase list with named tasks, explicit dependency edges, and a parallelism flag per phase
   2. The dependency graph passes structural validation — circular dependencies are detected and reported with the cycle path, not silently ignored
   3. Phases that have no dependency on each other are flagged as parallel-eligible in the plan output
-  4. Running `ath run --dry-run` on any project prints the full phase plan with dependency table — without making any LLM or git call
 **Plans**: 3 plans
+
+*Note: Dry-run mode (`ath run --dry-run` printing the plan without LLM/git calls) is PLAN-05 scope, deferred to Phase 8.*
 
 Plans:
 - [ ] 05-01-PLAN.md — Plan types (ExecutionPlan, PhaseSpec, TaskSpec), DAG algorithms (topological sort, parallelism groups, critical path), DecomposeError, ValidationError DAG variants
