@@ -84,14 +84,12 @@ Plans:
   2. User can run `ath run --spec ./spec.md` and Athena parses the markdown file into the same ProjectSpec structure
   3. User can run `ath run --codebase ./my-project` and Athena analyzes the existing files and produces a ProjectSpec describing next-step goals
   4. All three input modes produce a ProjectSpec that passes serde deserialization — malformed LLM output is caught with an actionable error, not a panic
-**Plans**: TBD
+**Plans**: 3 plans
 
 Plans:
-- [ ] 04-01: CLI argument surface for run subcommand (input mode flags)
-- [ ] 04-02: Natural language input normalization — LLM call to extract ProjectSpec
-- [ ] 04-03: Spec file parser — markdown/structured document to ProjectSpec
-- [ ] 04-04: Codebase analyzer — file tree traversal, summarization, next-step extraction
-- [ ] 04-05: ProjectSpec validation — serde deserialization with structured error on malformed output
+- [ ] 04-01-PLAN.md — InputMode enum, InputError type, AgentRequest json_schema extension, CLI --spec and --codebase flags
+- [ ] 04-02-PLAN.md — LLM prompt templates, spec file reader, parse_to_project_spec with retry-on-validation, call_provider JsonSpec threading
+- [ ] 04-03-PLAN.md — Codebase scanner with gitignore-aware traversal, full pipeline wiring through CLI, ProjectSpec summary display
 
 ### Phase 5: Phase Decomposition
 **Goal**: Given a ProjectSpec, Athena decomposes it into an ordered, dependency-validated phase plan with parallelism flags — and can catch structural errors (circular deps, missing contracts) before any API call is made
@@ -208,7 +206,7 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7 -> 8 -> 9 -> 10
 | 1. Foundation | 3/4 | In Progress|  |
 | 2. Agent Clients | 3/3 | Complete   | 2026-03-12 |
 | 3. Git Layer | 1/3 | In Progress|  |
-| 4. Input Parsing | 0/5 | Not started | - |
+| 4. Input Parsing | 0/3 | Not started | - |
 | 5. Phase Decomposition | 0/4 | Not started | - |
 | 6. Module Isolation | 0/4 | Not started | - |
 | 7. Phase Runner and Review | 0/5 | Not started | - |
