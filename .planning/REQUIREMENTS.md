@@ -17,7 +17,7 @@
 - [ ] **PLAN-01**: Athena decomposes project input into ordered phases with named tasks
 - [ ] **PLAN-02**: Athena automatically infers dependency DAG between phases and tasks
 - [ ] **PLAN-03**: Athena identifies which phases can run in parallel vs must be sequential
-- [ ] **PLAN-04**: Athena defines typed JSON schemas for inter-agent communication at every boundary
+- [x] **PLAN-04**: Athena defines typed JSON schemas for inter-agent communication at every boundary
 - [ ] **PLAN-05**: User can dry-run to see the full plan without executing (no API cost)
 
 ### Agent Orchestration
@@ -80,7 +80,7 @@
 | PLAN-01 | Phase 5 | Pending |
 | PLAN-02 | Phase 5 | Pending |
 | PLAN-03 | Phase 5 | Pending |
-| PLAN-04 | Phase 1 | Pending |
+| PLAN-04 | Phase 1 | Complete |
 | PLAN-05 | Phase 8 | Pending |
 | ORCH-01 | Phase 6 | Pending |
 | ORCH-02 | Phase 6 | Pending |
