@@ -8,10 +8,12 @@
 //! 5. Compute execution order, parallel groups, and critical path
 
 pub mod dag;
+pub mod display;
 pub mod error;
 pub mod prompt;
 pub mod validate;
 
+pub use display::display_execution_plan;
 pub use error::DecomposeError;
 pub use validate::PlanWarning;
 
