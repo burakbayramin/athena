@@ -21,6 +21,7 @@ fn make_request(agent: AgentKind) -> AgentRequest {
         agent,
         prompt: "What is 2 + 2?".into(),
         context: None,
+        json_schema: None,
         created_at: Utc::now(),
     }
 }

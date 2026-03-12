@@ -182,6 +182,7 @@ mod tests {
             agent: AgentKind::Codex("o3".to_string()),
             prompt: "test".to_string(),
             context: None,
+            json_schema: None,
             created_at: chrono::Utc::now(),
         };
 

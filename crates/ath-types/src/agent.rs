@@ -47,6 +47,9 @@ pub struct AgentRequest {
     pub prompt: String,
     /// Optional additional context for the agent.
     pub context: Option<String>,
+    /// Optional JSON schema for structured output (provider-native JSON mode).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub json_schema: Option<serde_json::Value>,
     /// When this request was created.
     pub created_at: DateTime<Utc>,
 }
@@ -102,10 +105,44 @@ mod tests {
             agent: AgentKind::Claude("opus-4".into()),
             prompt: "Analyze this code".into(),
             context: Some("src/main.rs contents".into()),
+            json_schema: None,
             created_at: Utc::now(),
         };
 
         let json = serde_json::to_string(&req).expect("serialize");
+        let deserialized: AgentRequest = serde_json::from_str(&json).expect("deserialize");
+        assert_eq!(req, deserialized);
+    }
+
+    #[test]
+    fn agent_request_json_schema_none_backward_compatible() {
+        let req = AgentRequest {
+            id: Uuid::new_v4(),
+            agent: AgentKind::Claude("opus-4".into()),
+            prompt: "test".into(),
+            context: None,
+            json_schema: None,
+            created_at: Utc::now(),
+        };
+        let json = serde_json::to_string(&req).expect("serialize");
+        // json_schema: None should not appear in serialized output
+        assert!(!json.contains("json_schema"));
+        let deserialized: AgentRequest = serde_json::from_str(&json).expect("deserialize");
+        assert_eq!(req, deserialized);
+    }
+
+    #[test]
+    fn agent_request_json_schema_round_trip() {
+        let req = AgentRequest {
+            id: Uuid::new_v4(),
+            agent: AgentKind::Claude("opus-4".into()),
+            prompt: "test".into(),
+            context: None,
+            json_schema: Some(serde_json::json!({"type": "object"})),
+            created_at: Utc::now(),
+        };
+        let json = serde_json::to_string(&req).expect("serialize");
+        assert!(json.contains("json_schema"));
         let deserialized: AgentRequest = serde_json::from_str(&json).expect("deserialize");
         assert_eq!(req, deserialized);
     }

@@ -208,6 +208,7 @@ mod tests {
             agent: AgentKind::Claude("opus-4".to_string()),
             prompt: "test".to_string(),
             context: None,
+            json_schema: None,
             created_at: chrono::Utc::now(),
         };
 

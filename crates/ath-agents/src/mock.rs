@@ -127,6 +127,7 @@ mod tests {
             agent: AgentKind::Claude("opus-4".into()),
             prompt: "test prompt".into(),
             context: None,
+            json_schema: None,
             created_at: Utc::now(),
         }
     }
