@@ -1,11 +1,10 @@
 //! Integration tests for ath-git using tempfile repos.
 //!
-//! These helpers and tests validate the GitLayer foundation.
-//! Commit/staging tests are added in Plan 02.
+//! Tests cover GitLayer foundation (Plan 01) and commit workflow (Plan 02).
 
 use std::path::Path;
 
-use ath_git::GitLayer;
+use ath_git::{CommitMetadata, GitError, GitLayer};
 use tempfile::TempDir;
 
 /// Create a temporary directory and initialize a GitLayer (auto-inits the repo).
@@ -96,5 +95,232 @@ fn empty_repo_not_dirty() {
     assert!(
         !layer.is_dirty().expect("is_dirty"),
         "empty repo (no commits) should not be considered dirty"
+    );
+}
+
+// ---------------------------------------------------------------------------
+// Plan 02: Commit workflow integration tests
+// ---------------------------------------------------------------------------
+
+fn sample_meta() -> CommitMetadata {
+    CommitMetadata {
+        phase_name: "test-phase".to_string(),
+        agent_provider: "Anthropic".to_string(),
+        agent_model: "opus-4".to_string(),
+        task_id: "task-001".to_string(),
+        files_count: 1,
+        review_status: None,
+        reviewer: None,
+    }
+}
+
+#[test]
+fn commit_contains_only_staged_files() {
+    let (dir, layer) = create_temp_repo();
+
+    // Create initial commit with file_a
+    write_file(dir.path(), "file_a.txt", "aaa");
+    layer
+        .stage_and_commit(
+            &[dir.path().join("file_a.txt")],
+            &CommitMetadata {
+                files_count: 1,
+                ..sample_meta()
+            },
+        )
+        .expect("initial commit");
+
+    // Write file_b and file_c
+    write_file(dir.path(), "file_b.txt", "bbb");
+    write_file(dir.path(), "file_c.txt", "ccc");
+
+    // Stage only file_b
+    let result = layer
+        .stage_and_commit(
+            &[dir.path().join("file_b.txt")],
+            &CommitMetadata {
+                files_count: 1,
+                ..sample_meta()
+            },
+        )
+        .expect("second commit");
+
+    assert!(result.committed);
+
+    // Inspect the commit tree
+    let repo = git2::Repository::open(dir.path()).expect("open repo");
+    let commit = repo.find_commit(result.oid.unwrap()).unwrap();
+    let tree = commit.tree().unwrap();
+
+    assert!(
+        tree.get_name("file_a.txt").is_some(),
+        "file_a.txt should be in tree (from initial commit)"
+    );
+    assert!(
+        tree.get_name("file_b.txt").is_some(),
+        "file_b.txt should be in tree (newly staged)"
+    );
+    assert!(
+        tree.get_name("file_c.txt").is_none(),
+        "file_c.txt should NOT be in tree (not staged)"
+    );
+}
+
+#[test]
+fn commit_message_has_trailers() {
+    let (dir, layer) = create_temp_repo();
+
+    write_file(dir.path(), "file.txt", "content");
+    let result = layer
+        .stage_and_commit(&[dir.path().join("file.txt")], &sample_meta())
+        .expect("commit");
+
+    let repo = git2::Repository::open(dir.path()).expect("open repo");
+    let commit = repo.find_commit(result.oid.unwrap()).unwrap();
+    let message = commit.message().unwrap();
+
+    assert!(
+        message.starts_with("athena:"),
+        "subject should start with 'athena:'"
+    );
+    assert!(message.contains("Phase: test-phase"), "missing Phase trailer");
+    assert!(
+        message.contains("Agent: Anthropic/opus-4"),
+        "missing Agent trailer"
+    );
+    assert!(message.contains("Task-Id: task-001"), "missing Task-Id trailer");
+    assert!(
+        message.contains("Files-Count: 1"),
+        "missing Files-Count trailer"
+    );
+}
+
+#[test]
+fn initial_commit_empty_repo() {
+    let (dir, layer) = create_temp_repo();
+    // No prior commits -- repo is empty
+
+    write_file(dir.path(), "init.txt", "hello");
+    let result = layer
+        .stage_and_commit(&[dir.path().join("init.txt")], &sample_meta())
+        .expect("initial commit");
+
+    assert!(result.committed, "should have created a commit");
+    assert!(result.oid.is_some(), "should have an OID");
+
+    // HEAD should now exist
+    let repo = git2::Repository::open(dir.path()).expect("open repo");
+    assert!(
+        repo.head().is_ok(),
+        "HEAD should exist after initial commit"
+    );
+}
+
+#[test]
+fn one_commit_per_phase() {
+    let (dir, layer) = create_temp_repo();
+
+    // First commit
+    write_file(dir.path(), "a.txt", "aaa");
+    layer
+        .stage_and_commit(
+            &[dir.path().join("a.txt")],
+            &CommitMetadata {
+                phase_name: "phase-1".to_string(),
+                task_id: "t-1".to_string(),
+                ..sample_meta()
+            },
+        )
+        .expect("first commit");
+
+    // Second commit
+    write_file(dir.path(), "b.txt", "bbb");
+    layer
+        .stage_and_commit(
+            &[dir.path().join("b.txt")],
+            &CommitMetadata {
+                phase_name: "phase-2".to_string(),
+                task_id: "t-2".to_string(),
+                ..sample_meta()
+            },
+        )
+        .expect("second commit");
+
+    // Count commits via revwalk
+    let repo = git2::Repository::open(dir.path()).expect("open repo");
+    let mut revwalk = repo.revwalk().unwrap();
+    revwalk.push_head().unwrap();
+    let count = revwalk.count();
+    assert_eq!(count, 2, "should have exactly 2 commits in git log");
+}
+
+#[test]
+fn empty_diff_skips_commit() {
+    let (dir, layer) = create_temp_repo();
+
+    // First commit
+    write_file(dir.path(), "file.txt", "content");
+    let first = layer
+        .stage_and_commit(&[dir.path().join("file.txt")], &sample_meta())
+        .expect("first commit");
+    assert!(first.committed);
+
+    // Stage same file again (no changes)
+    let second = layer
+        .stage_and_commit(&[dir.path().join("file.txt")], &sample_meta())
+        .expect("second stage_and_commit");
+
+    assert!(
+        !second.committed,
+        "should skip commit when diff is empty"
+    );
+    assert!(second.oid.is_none(), "no OID for skipped commit");
+}
+
+#[test]
+fn missing_file_returns_error() {
+    let (dir, layer) = create_temp_repo();
+
+    let result = layer.stage_and_commit(
+        &[dir.path().join("nonexistent.txt")],
+        &sample_meta(),
+    );
+
+    assert!(result.is_err(), "should error on missing file");
+    let err = result.unwrap_err();
+    assert!(
+        matches!(err, GitError::FileMissing { .. }),
+        "expected GitError::FileMissing, got: {:?}",
+        err
+    );
+}
+
+#[test]
+fn commit_with_review_trailers() {
+    let (dir, layer) = create_temp_repo();
+
+    write_file(dir.path(), "reviewed.txt", "code");
+
+    let meta = CommitMetadata {
+        review_status: Some("passed".to_string()),
+        reviewer: Some("Google/2.5-pro".to_string()),
+        ..sample_meta()
+    };
+
+    let result = layer
+        .stage_and_commit(&[dir.path().join("reviewed.txt")], &meta)
+        .expect("commit with review");
+
+    let repo = git2::Repository::open(dir.path()).expect("open repo");
+    let commit = repo.find_commit(result.oid.unwrap()).unwrap();
+    let message = commit.message().unwrap();
+
+    assert!(
+        message.contains("Review-Status: passed"),
+        "missing Review-Status trailer"
+    );
+    assert!(
+        message.contains("Reviewer: Google/2.5-pro"),
+        "missing Reviewer trailer"
     );
 }
