@@ -30,17 +30,17 @@ Decimal phases appear between their surrounding integers in numeric order.
 **Depends on**: Nothing (first phase)
 **Requirements**: INPT-04, PLAN-04
 **Success Criteria** (what must be TRUE):
-  1. Running `athena --version` succeeds and config is loaded from env vars and config file without panicking
+  1. Running `ath --version` succeeds and config is loaded from env vars and config file without panicking
   2. Providing an invalid or missing API key produces a typed error (not a panic) with a clear message identifying which key is missing
   3. The typed inter-agent schemas (AgentRequest, AgentResponse, ReviewVerdict, ProjectSpec) can be serialized and deserialized round-trip without data loss
   4. All internal modules import from the shared types crate — no duplicated type definitions exist in the project
-**Plans**: TBD
+**Plans**: 4 plans
 
 Plans:
-- [ ] 01-01: Cargo workspace scaffold, crate layout, and shared dependencies
-- [ ] 01-02: Error hierarchy (thiserror domain errors + anyhow boundary wiring)
-- [ ] 01-03: ConfigStore — env var and config file loading via dotenvy + clap env integration
-- [ ] 01-04: Typed inter-agent schemas — AgentRequest, AgentResponse, ReviewVerdict, ProjectSpec, PhaseRecord
+- [ ] 01-01-PLAN.md — Cargo workspace scaffold, all 7 ath-* crate stubs, workspace-level dependency management
+- [ ] 01-02-PLAN.md — ath-types: error hierarchy + all inter-agent schemas (ProjectSpec, AgentRequest, AgentResponse, ReviewVerdict, PhaseRecord) with validation and round-trip tests
+- [ ] 01-03-PLAN.md — ath-config: ConfigStore with layered TOML/env loading, precedence merge, graceful degradation
+- [ ] 01-04-PLAN.md — ath-cli: binary wiring with config load, provider status, error display formatting
 
 ### Phase 2: Agent Clients
 **Goal**: Athena can call Claude, Gemini, and Codex APIs reliably — with retry, backoff, and circuit-breaker behavior — through a uniform trait interface
@@ -82,9 +82,9 @@ Plans:
 **Depends on**: Phase 2
 **Requirements**: INPT-01, INPT-02, INPT-03
 **Success Criteria** (what must be TRUE):
-  1. User can run `athena run "build me a REST API for a todo app"` and Athena produces a ProjectSpec with named goals and constraints — no crash, no empty output
-  2. User can run `athena run --spec ./spec.md` and Athena parses the markdown file into the same ProjectSpec structure
-  3. User can run `athena run --codebase ./my-project` and Athena analyzes the existing files and produces a ProjectSpec describing next-step goals
+  1. User can run `ath run "build me a REST API for a todo app"` and Athena produces a ProjectSpec with named goals and constraints — no crash, no empty output
+  2. User can run `ath run --spec ./spec.md` and Athena parses the markdown file into the same ProjectSpec structure
+  3. User can run `ath run --codebase ./my-project` and Athena analyzes the existing files and produces a ProjectSpec describing next-step goals
   4. All three input modes produce a ProjectSpec that passes serde deserialization — malformed LLM output is caught with an actionable error, not a panic
 **Plans**: TBD
 
@@ -103,7 +103,7 @@ Plans:
   1. For a given ProjectSpec, Athena produces a phase list with named tasks, explicit dependency edges, and a parallelism flag per phase
   2. The dependency graph passes structural validation — circular dependencies are detected and reported with the cycle path, not silently ignored
   3. Phases that have no dependency on each other are flagged as parallel-eligible in the plan output
-  4. Running `athena run --dry-run` on any project prints the full phase plan with dependency table — without making any LLM or git call
+  4. Running `ath run --dry-run` on any project prints the full phase plan with dependency table — without making any LLM or git call
 **Plans**: TBD
 
 Plans:
@@ -153,10 +153,10 @@ Plans:
 **Depends on**: Phase 7
 **Requirements**: PLAN-05, OUTP-02
 **Success Criteria** (what must be TRUE):
-  1. `athena run`, `athena init`, and `athena report` are distinct subcommands with --help output describing their arguments
+  1. `ath run`, `ath init`, and `ath report` are distinct subcommands with --help output describing their arguments
   2. During execution, the terminal updates in real time showing: current phase name, active agent, task status (running/complete/failed)
-  3. `athena run --dry-run` prints the full phase plan and exits without executing any LLM or git call
-  4. `athena run --verbose` shows full agent prompt/response transcripts in addition to normal progress output
+  3. `ath run --dry-run` prints the full phase plan and exits without executing any LLM or git call
+  4. `ath run --verbose` shows full agent prompt/response transcripts in addition to normal progress output
 **Plans**: TBD
 
 Plans:
@@ -203,7 +203,7 @@ Plans:
 ## Progress
 
 **Execution Order:**
-Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8 → 9 → 10
+Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7 -> 8 -> 9 -> 10
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
