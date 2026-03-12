@@ -16,6 +16,7 @@ use ath_types::agent::AgentRequest;
 use ath_types::project::ProjectSpec;
 use serde::{Deserialize, Serialize};
 
+pub use codebase::{is_key_file, scan_codebase};
 pub use error::InputError;
 pub use prompt::*;
 pub use spec_file::read_spec_file;
@@ -131,6 +132,89 @@ pub async fn parse_to_project_spec(
         attempts: MAX_PARSE_ATTEMPTS,
         last_error,
     })
+}
+
+/// High-level input parsing: dispatches all three InputMode variants
+/// through the correct pipeline, producing a ProjectSpec via LLM.
+///
+/// - NaturalLanguage: sends description directly to LLM
+/// - SpecFile: reads file contents, sends to LLM
+/// - Codebase: scans directory (via spawn_blocking), sends tree + key files to LLM
+pub async fn parse_input(
+    mode: InputMode,
+    backend: &dyn AgentBackend,
+) -> Result<ProjectSpec, InputError> {
+    match mode {
+        InputMode::NaturalLanguage(desc) => {
+            parse_to_project_spec(backend, move |last_err| {
+                build_natural_language_request(&desc, last_err)
+            })
+            .await
+        }
+        InputMode::SpecFile(path) => {
+            let content = read_spec_file(&path).await?;
+            parse_to_project_spec(backend, move |last_err| {
+                build_spec_file_request(&content, last_err)
+            })
+            .await
+        }
+        InputMode::Codebase { path, intent } => {
+            let scan_path = path.clone();
+            let (tree, key_files) = tokio::task::spawn_blocking(move || {
+                scan_codebase(&scan_path)
+            })
+            .await
+            .map_err(|e| InputError::Io(std::io::Error::new(std::io::ErrorKind::Other, e)))??;
+
+            parse_to_project_spec(backend, move |last_err| {
+                build_codebase_request(&tree, &key_files, intent.as_deref(), last_err)
+            })
+            .await
+        }
+    }
+}
+
+/// Display a formatted summary of a ProjectSpec to the terminal.
+pub fn display_project_spec_summary(spec: &ProjectSpec) {
+    use colored::Colorize;
+
+    println!("{} {}", "Project:".bold(), spec.name);
+    println!("{} {}", "Description:".bold(), spec.description);
+
+    println!("{} ({}):", "Goals".bold(), spec.goals.len());
+    for (i, goal) in spec.goals.iter().enumerate() {
+        let tags: Vec<&str> = goal.skill_tags.iter().map(|t| t.0.as_str()).collect();
+        if tags.is_empty() {
+            println!("  {}. {}", i + 1, goal.description);
+        } else {
+            println!("  {}. {} ({})", i + 1, goal.description, tags.join(", "));
+        }
+    }
+
+    let lang = spec
+        .target_language
+        .as_deref()
+        .unwrap_or("not specified");
+    let fw = spec
+        .target_framework
+        .as_deref()
+        .unwrap_or("not specified");
+    println!("{} {} / {}", "Target:".bold(), lang, fw);
+
+    println!("{} {}", "Constraints:".bold(), spec.constraints.len());
+    for c in &spec.constraints {
+        println!("  - {}", c);
+    }
+
+    println!("{} {}", "Expected files:".bold(), spec.expected_files.len());
+    for f in &spec.expected_files {
+        println!("  - {}", f);
+    }
+
+    println!(
+        "{}",
+        "Proceeding with this specification. (Use --yes in CI to skip this summary.)".dimmed()
+    );
 }
 
 #[cfg(test)]

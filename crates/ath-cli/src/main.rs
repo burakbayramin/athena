@@ -73,23 +73,27 @@ fn run(cli: Cli) -> Result<()> {
 
     match cli.command {
         Some(Commands::Run { description, spec, codebase }) => {
-            use ath_planner::input::{InputMode, resolve_input_mode};
+            use ath_planner::input::{resolve_input_mode, display_project_spec_summary};
+
             let mode = resolve_input_mode(
                 description.as_deref(),
                 spec.as_deref(),
                 codebase.as_deref(),
             ).map_err(|e| anyhow::anyhow!("{}", e))?;
-            match &mode {
-                InputMode::NaturalLanguage(desc) => println!("Input: natural language -- {}", desc),
-                InputMode::SpecFile(path) => println!("Input: spec file -- {}", path.display()),
-                InputMode::Codebase { path, intent } => {
-                    println!("Input: codebase -- {}", path.display());
-                    if let Some(i) = intent {
-                        println!("Intent: {}", i);
-                    }
-                }
-            }
-            println!("Input parsing not yet fully implemented.");
+
+            println!("Input mode resolved: {:?}", mode);
+            println!("Full LLM parsing requires a configured agent. Pipeline ready for integration.");
+
+            // Note: Actually calling parse_input requires an AgentBackend instance.
+            // The agent construction (ConfigStore -> ClaudeHandle) will be wired in
+            // Phase 7 when the full orchestrator pipeline is built. For now, the CLI
+            // demonstrates input mode resolution and the parsing pipeline is tested
+            // via unit tests with MockBackend.
+            //
+            // When wired:
+            //   let spec = parse_input(mode, &backend).await?;
+            //   display_project_spec_summary(&spec);
+            let _ = display_project_spec_summary; // suppress unused import warning
         }
         Some(Commands::Init) => {
             println!("Init not yet implemented.");
