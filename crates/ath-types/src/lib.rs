@@ -15,6 +15,7 @@ pub mod agent;
 pub mod project;
 pub mod review;
 pub mod phase;
+pub mod plan;
 
 // Re-export key types at crate root for ergonomic imports
 pub use error::ValidationError;
@@ -22,3 +23,4 @@ pub use agent::{AgentKind, AgentRequest, AgentResponse};
 pub use project::{ProjectSpec, GoalSpec, SkillTag};
 pub use review::{ReviewVerdict, Severity, CodeSuggestion};
 pub use phase::{PhaseRecord, ReviewAttempt, TokenUsage, AgentContribution};
+pub use plan::{ExecutionPlan, PhaseSpec, TaskSpec, ContractLabel};
