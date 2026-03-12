@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 02-01-PLAN.md
-last_updated: "2026-03-12T11:57:59.784Z"
-last_activity: 2026-03-12 — Completed Plan 02-01 (Agent contracts)
+stopped_at: Completed 02-02-PLAN.md
+last_updated: "2026-03-12T12:09:21.000Z"
+last_activity: 2026-03-12 — Completed Plan 02-02 (Actor infrastructure)
 progress:
   total_phases: 10
   completed_phases: 1
   total_plans: 7
-  completed_plans: 5
-  percent: 71
+  completed_plans: 6
+  percent: 86
 ---
 
 # Project State
@@ -26,32 +26,33 @@ See: .planning/PROJECT.md (updated 2026-03-12)
 ## Current Position
 
 Phase: 2 of 10 (Agent Clients)
-Plan: 1 of 3 in current phase
+Plan: 2 of 3 in current phase
 Status: In Progress
-Last activity: 2026-03-12 — Completed Plan 02-01 (Agent contracts)
+Last activity: 2026-03-12 — Completed Plan 02-02 (Actor infrastructure)
 
-Progress: [███████░░░] 71%
+Progress: [████████░░] 86%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 5
-- Average duration: 3 min
-- Total execution time: 0.3 hours
+- Total plans completed: 6
+- Average duration: 4 min
+- Total execution time: 0.4 hours
 
 **By Phase:**
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
 | 01-foundation | 4 | 12 min | 3 min |
-| 02-agent-clients | 1 | 5 min | 5 min |
+| 02-agent-clients | 2 | 15 min | 8 min |
 
 **Recent Trend:**
-- Last 5 plans: 01-02 (2 min), 01-03 (3 min), 01-04 (3 min), 02-01 (5 min)
+- Last 5 plans: 01-02 (2 min), 01-03 (3 min), 01-04 (3 min), 02-01 (5 min), 02-02 (10 min)
 - Trend: Steady
 
 *Updated after each plan completion*
 | Phase 02 P01 | 5min | 2 tasks | 7 files |
+| Phase 02 P02 | 10min | 2 tasks | 8 files |
 
 ## Accumulated Context
 
@@ -77,6 +78,10 @@ Recent decisions affecting current work:
 - 02-01: MockBackend uses enum MockMode (Sequenced/AlwaysOk/AlwaysFail) for mode selection
 - 02-01: AgentError is Debug only (not Clone) -- errors flow through Result, not stored in collections
 - [Phase 02]: Renamed AgentError::Unknown.source to .message for thiserror 2.0 compatibility
+- 02-02: Manual retry loop instead of backon Retryable combinator to honor Retry-After from RateLimit errors
+- 02-02: genai AuthResolver closure captures cloned ConfigStore keys, matches on adapter_kind
+- 02-02: AtomicBool flag for non-blocking is_available() without channel round-trip
+- 02-02: genai does not expose Retry-After headers; retry_after always None from classify_error
 
 ### Pending Todos
 
@@ -90,6 +95,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-12T11:57:55.222Z
-Stopped at: Completed 02-01-PLAN.md
+Last session: 2026-03-12T12:09:21Z
+Stopped at: Completed 02-02-PLAN.md
 Resume file: None
