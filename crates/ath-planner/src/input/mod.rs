@@ -2,14 +2,25 @@
 //!
 //! Determines how the user wants to provide project input:
 //! natural language description, spec file, or existing codebase.
+//! Provides LLM-based parsing with retry logic for all input modes.
 
 pub mod error;
+pub mod prompt;
+pub mod spec_file;
 
 use std::path::{Path, PathBuf};
 
+use ath_agents::backend::AgentBackend;
+use ath_types::agent::AgentRequest;
+use ath_types::project::ProjectSpec;
 use serde::{Deserialize, Serialize};
 
 pub use error::InputError;
+pub use prompt::*;
+pub use spec_file::read_spec_file;
+
+/// Maximum number of LLM parsing attempts before giving up.
+const MAX_PARSE_ATTEMPTS: usize = 3;
 
 /// Discriminated union of the three input modes.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -74,10 +85,112 @@ pub fn resolve_input_mode(
     })
 }
 
+/// Parse input into a ProjectSpec via LLM with retry logic.
+///
+/// The `request_builder` closure constructs an `AgentRequest` for each attempt,
+/// receiving the last error message (if any) for retry feedback.
+///
+/// Attempts up to 3 times:
+/// 1. Sends the request to the backend
+/// 2. Parses the response content as ProjectSpec JSON
+/// 3. Validates the parsed spec
+/// 4. On failure, retries with the error appended to the prompt
+pub async fn parse_to_project_spec(
+    backend: &dyn AgentBackend,
+    request_builder: impl Fn(Option<&str>) -> AgentRequest,
+) -> Result<ProjectSpec, InputError> {
+    let mut last_error: Option<String> = None;
+
+    for _attempt in 0..MAX_PARSE_ATTEMPTS {
+        let request = request_builder(last_error.as_deref());
+        let response = backend.send(request).await.map_err(InputError::Agent)?;
+
+        // Try to parse as ProjectSpec
+        match serde_json::from_str::<ProjectSpec>(&response.content) {
+            Ok(spec) => {
+                // Validate the parsed spec
+                match spec.validate() {
+                    Ok(()) => return Ok(spec),
+                    Err(e) => {
+                        last_error = Some(format!(
+                            "Validation failed: {}. Hint: {}",
+                            e,
+                            e.hint()
+                        ));
+                    }
+                }
+            }
+            Err(e) => {
+                last_error = Some(format!("JSON parse error: {}", e));
+            }
+        }
+    }
+
+    Err(InputError::ParseFailed {
+        attempts: MAX_PARSE_ATTEMPTS,
+        last_error,
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use ath_agents::mock::MockBackend;
+    use ath_types::agent::{AgentKind, AgentResponse};
+    use chrono::Utc;
     use std::path::Path;
+    use uuid::Uuid;
+
+    /// Helper: valid ProjectSpec JSON string.
+    fn valid_project_spec_json() -> String {
+        serde_json::json!({
+            "name": "todo-app",
+            "description": "A REST API todo application",
+            "goals": [{
+                "description": "CRUD endpoints",
+                "skill_tags": ["rust", "api"]
+            }],
+            "constraints": ["Must use PostgreSQL"],
+            "target_language": "Rust",
+            "target_framework": "Axum",
+            "expected_files": ["src/main.rs"]
+        })
+        .to_string()
+    }
+
+    /// Helper: valid ProjectSpec JSON but with empty name (fails validation).
+    fn invalid_name_project_spec_json() -> String {
+        serde_json::json!({
+            "name": "",
+            "description": "A todo app",
+            "goals": [{
+                "description": "CRUD endpoints",
+                "skill_tags": ["rust"]
+            }],
+            "constraints": [],
+            "target_language": null,
+            "target_framework": null,
+            "expected_files": ["src/main.rs"]
+        })
+        .to_string()
+    }
+
+    fn make_response(content: &str) -> Result<AgentResponse, ath_agents::error::AgentError> {
+        Ok(AgentResponse {
+            request_id: Uuid::new_v4(),
+            agent: AgentKind::Claude("mock".into()),
+            content: content.to_string(),
+            input_tokens: 0,
+            output_tokens: 0,
+            created_at: Utc::now(),
+        })
+    }
+
+    fn simple_request_builder(last_error: Option<&str>) -> AgentRequest {
+        build_natural_language_request("build a todo app", last_error)
+    }
+
+    // --- resolve_input_mode tests (from 04-01) ---
 
     #[test]
     fn natural_language_round_trip() {
@@ -156,5 +269,60 @@ mod tests {
     fn resolve_no_input_errors() {
         let result = resolve_input_mode(None, None, None);
         assert!(matches!(result, Err(InputError::NoInput { .. })));
+    }
+
+    // --- parse_to_project_spec tests ---
+
+    #[tokio::test]
+    async fn parse_succeeds_on_first_try_with_valid_json() {
+        let mock = MockBackend::always_ok(&valid_project_spec_json());
+        let result = parse_to_project_spec(&mock, simple_request_builder).await;
+        assert!(result.is_ok());
+        let spec = result.unwrap();
+        assert_eq!(spec.name, "todo-app");
+        assert_eq!(spec.goals.len(), 1);
+    }
+
+    #[tokio::test]
+    async fn parse_retries_on_invalid_json_then_succeeds() {
+        let mock = MockBackend::new(vec![
+            make_response("this is not valid json"),
+            make_response(&valid_project_spec_json()),
+        ]);
+        let result = parse_to_project_spec(&mock, simple_request_builder).await;
+        assert!(result.is_ok());
+        let spec = result.unwrap();
+        assert_eq!(spec.name, "todo-app");
+    }
+
+    #[tokio::test]
+    async fn parse_fails_after_3_attempts_with_always_invalid_json() {
+        // MockBackend::always_ok returns the same (invalid) content every time
+        let mock = MockBackend::always_ok("not json at all");
+        let result = parse_to_project_spec(&mock, simple_request_builder).await;
+        assert!(result.is_err());
+        match result.unwrap_err() {
+            InputError::ParseFailed {
+                attempts,
+                last_error,
+            } => {
+                assert_eq!(attempts, 3);
+                assert!(last_error.is_some());
+                assert!(last_error.unwrap().contains("JSON parse error"));
+            }
+            other => panic!("expected ParseFailed, got: {:?}", other),
+        }
+    }
+
+    #[tokio::test]
+    async fn parse_retries_on_validation_failure_then_succeeds() {
+        let mock = MockBackend::new(vec![
+            make_response(&invalid_name_project_spec_json()),
+            make_response(&valid_project_spec_json()),
+        ]);
+        let result = parse_to_project_spec(&mock, simple_request_builder).await;
+        assert!(result.is_ok());
+        let spec = result.unwrap();
+        assert_eq!(spec.name, "todo-app");
     }
 }
