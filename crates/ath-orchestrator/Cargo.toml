@@ -7,6 +7,7 @@ edition.workspace = true
 ath-types = { path = "../ath-types" }
 ath-agents = { path = "../ath-agents" }
 ath-git = { path = "../ath-git" }
+ath-memory = { path = "../ath-memory" }
 thiserror.workspace = true
 serde.workspace = true
 serde_json.workspace = true
@@ -14,6 +15,7 @@ tokio = { workspace = true, features = ["rt", "macros"] }
 async-trait.workspace = true
 chrono.workspace = true
 uuid.workspace = true
+tracing.workspace = true
 
 [dev-dependencies]
 tempfile.workspace = true

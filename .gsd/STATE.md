@@ -1,7 +1,7 @@
 # GSD State
 
 **Active Milestone:** M002 — Memory Layer
-**Active Slice:** S02 — Observation System
+**Active Slice:** S04 — Orchestrator Integration (Observation + Injection)
 **Phase:** executing
 **Requirements Status:** 0 active · 0 validated · 0 deferred · 0 out of scope
 
@@ -10,11 +10,10 @@
 - 🔄 **M002:** Memory Layer
 
 ## Recent Decisions
-- D008: Observations use file-per-run JSONL (`<run-uuid>.jsonl`)
-- D009: `ath-memory` depends on `ath-types` for shared agent/review/phase types
+- None recorded
 
 ## Blockers
 - None
 
 ## Next Action
-Execute T01 (observation types, storage, and buffer).
+Execute T01: Build ContextInjector in ath-memory.

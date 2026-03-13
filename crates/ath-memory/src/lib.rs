@@ -17,6 +17,7 @@
 pub mod error;
 pub mod extract;
 pub mod index;
+pub mod inject;
 pub mod keyword;
 pub mod observe;
 pub mod store;
@@ -36,4 +37,5 @@ pub use observe::{
 pub use extract::{
     ExtractionConfig, ExtractionLlm, ExtractionResult, MemoryExtractor, RunSummary,
 };
+pub use inject::{ContextInjector, InjectedContext, InjectionConfig};
 pub use uri::VikingUri;

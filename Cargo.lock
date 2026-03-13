@@ -196,6 +196,7 @@ dependencies = [
  "async-trait",
  "ath-agents",
  "ath-git",
+ "ath-memory",
  "ath-types",
  "chrono",
  "serde",
@@ -203,6 +204,7 @@ dependencies = [
  "tempfile",
  "thiserror 2.0.18",
  "tokio",
+ "tracing",
  "uuid",
 ]
 

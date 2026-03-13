@@ -28,9 +28,9 @@ use crate::progress::{emit_progress, ProgressEvent, SharedProgressObserver};
 /// commit gate that serializes write + git commit operations.
 /// Execution halts at the first phase that fails (fail-fast).
 pub struct AgentCoordinator {
-    registry: Arc<AgentRegistry>,
-    output_dir: PathBuf,
-    git: Option<ath_git::async_ops::AsyncGitLayer>,
+    pub(crate) registry: Arc<AgentRegistry>,
+    pub(crate) output_dir: PathBuf,
+    pub(crate) git: Option<ath_git::async_ops::AsyncGitLayer>,
 }
 
 impl AgentCoordinator {
