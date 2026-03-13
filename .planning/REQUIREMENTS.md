@@ -18,7 +18,7 @@
 - [x] **PLAN-02**: Athena automatically infers dependency DAG between phases and tasks
 - [x] **PLAN-03**: Athena identifies which phases can run in parallel vs must be sequential
 - [x] **PLAN-04**: Athena defines typed JSON schemas for inter-agent communication at every boundary
-- [ ] **PLAN-05**: User can dry-run to see the full plan without executing (no API cost)
+- [x] **PLAN-05**: User can dry-run to see the full plan without executing (no API cost)
 
 ### Agent Orchestration
 
@@ -38,7 +38,7 @@
 ### Output
 
 - [x] **OUTP-01**: Athena commits generated code to local git repo after each phase with phase/agent metadata
-- [ ] **OUTP-02**: Terminal shows real-time progress: current phase, active agent, task status
+- [x] **OUTP-02**: Terminal shows real-time progress: current phase, active agent, task status
 - [ ] **OUTP-03**: Athena produces structured final report: phase table, agent assignments, review outcomes
 - [ ] **OUTP-04**: Error messages include actionable context distinguishing API errors, review failures, and schema violations
 
@@ -81,7 +81,7 @@
 | PLAN-02 | Phase 5 | Complete |
 | PLAN-03 | Phase 5 | Complete |
 | PLAN-04 | Phase 1 | Complete |
-| PLAN-05 | Phase 8 | Pending |
+| PLAN-05 | Phase 8 | Complete |
 | ORCH-01 | Phase 6 | Complete |
 | ORCH-02 | Phase 6 | Complete |
 | ORCH-03 | Phase 6 | Complete |
@@ -92,7 +92,7 @@
 | QUAL-03 | Phase 7 | Complete |
 | QUAL-04 | Phase 9 | Pending |
 | OUTP-01 | Phase 3 | Complete |
-| OUTP-02 | Phase 8 | Pending |
+| OUTP-02 | Phase 8 | Complete |
 | OUTP-03 | Phase 9 | Pending |
 | OUTP-04 | Phase 9 | Pending |
 
@@ -103,4 +103,4 @@
 
 ---
 *Requirements defined: 2026-03-12*
-*Last updated: 2026-03-12 after roadmap creation — all 22 requirements mapped*
+*Last updated: 2026-03-13 after Phase 9 Plan 01 execution updates*

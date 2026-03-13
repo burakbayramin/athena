@@ -173,7 +173,7 @@ Plans:
 **Plans**: 4 plans
 
 Plans:
-- [ ] 09-01: ReportWriter — JSON + Markdown report generation from run state
+- [x] 09-01: ReportWriter — JSON + Markdown report generation from run state
 - [ ] 09-02: Token usage accumulator — per-phase, per-agent tracking across the full run
 - [ ] 09-03: Cost estimator — token counts to dollar estimates using known provider pricing
 - [ ] 09-04: Actionable error messages — context-rich formatting for API, review, and schema error types
@@ -210,5 +210,5 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7 -> 8 -> 9 -> 10
 | 6. Module Isolation | 0/3 | Not started | - |
 | 7. Phase Runner and Review | 4/4 | Complete   | 2026-03-13 |
 | 8. CLI and Progress | 4/4 | Complete | 2026-03-13 |
-| 9. Reporting and Error Quality | 0/4 | Not started | - |
+| 9. Reporting and Error Quality | 1/4 | In Progress | - |
 | 10. Parallel Execution | 0/4 | Not started | - |

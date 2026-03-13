@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: in_progress
-stopped_at: Planned Phase 09
-last_updated: "2026-03-13T11:09:49Z"
-last_activity: 2026-03-13 - Planned Phase 09 (Reporting and Error Quality)
+stopped_at: Completed 09-01
+last_updated: "2026-03-13T11:21:42Z"
+last_activity: 2026-03-13 - Completed 09-01 (Run Report Artifact)
 progress:
   total_phases: 10
   completed_phases: 8
   total_plans: 32
-  completed_plans: 28
-  percent: 88
+  completed_plans: 29
+  percent: 91
 ---
 
 # Project State
@@ -21,22 +21,22 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-12)
 
 **Core value:** Intelligent phase analysis - breaking any software project into well-structured, dependency-aware phases with correct agent assignments and parallelization
-**Current focus:** Phase 9: Reporting and Error Quality (Planned)
+**Current focus:** Phase 9: Reporting and Error Quality (In Progress)
 
 ## Current Position
 
 Phase: 9 of 10 (Reporting and Error Quality)
-Plan: 4 plans created, ready to execute
-Status: Ready for 09-01 (Report Writer)
-Last activity: 2026-03-13 - Planned Phase 09 (Reporting and Error Quality)
-Progress: [##########--] 88%
+Plan: 1 of 4 complete, 09-02 ready to execute
+Status: Executing Phase 09
+Last activity: 2026-03-13 - Completed 09-01 (Run Report Artifact)
+Progress: [###########-] 91%
 
 ## Performance Metrics
 
-- Total plans completed: 28
+- Total plans completed: 29
 - Average duration: 4 min
 - Total execution time: 1.7 hours
-- Most recent completed plan: 08-04 (11 min, 2 tasks, 6 files)
+- Most recent completed plan: 09-01 (7 min, 2 tasks, 9 files)
 
 ## Recent Decisions
 
@@ -53,6 +53,8 @@ Progress: [##########--] 88%
 - 08-04: `ath run --dry-run` reads `.ath/last-plan.json` before config or provider setup and fails clearly when the cache is absent
 - 08-04: Normal runs persist the routed, isolation-checked `ExecutionPlan` before execution so future dry-runs stay honest
 - 08-04: Assigned agents render through the shared execution-plan formatter used by both live and cached plan views
+- 09-01: Successful runs persist a typed `RunReport` under `.ath/runs/<run-id>/report.json` with a `latest.txt` pointer for default `ath report`
+- 09-01: `PhaseRecord` now carries stable `phase_id` joins so saved execution records can map back to routed plan metadata without name matching
 - 09-01 through 09-04 are planned as report artifact persistence, token accumulation, cost estimation, and actionable error surfacing
 - Phase 9 planning proceeds without a dedicated CONTEXT.md and relies on roadmap, requirements, and codebase research only
 
@@ -66,6 +68,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-13T11:09:49Z
-Stopped at: Planned Phase 09
-Resume file: .planning/phases/09-reporting-and-error-quality/09-01-PLAN.md
+Last session: 2026-03-13T11:21:42Z
+Stopped at: Completed 09-01
+Resume file: .planning/phases/09-reporting-and-error-quality/09-02-PLAN.md
