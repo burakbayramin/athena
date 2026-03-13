@@ -30,7 +30,10 @@ pub enum AgentError {
 
     /// Request timed out waiting for provider response.
     #[error("Request to {provider} timed out after {duration:?}")]
-    Timeout { provider: String, duration: Duration },
+    Timeout {
+        provider: String,
+        duration: Duration,
+    },
 
     /// Provider returned an invalid or unparseable response.
     #[error("Invalid response from {provider}: {reason}")]
@@ -62,6 +65,53 @@ impl AgentError {
                 | AgentError::Timeout { .. }
                 | AgentError::InvalidResponse { .. }
         )
+    }
+
+    /// Returns actionable guidance for resolving this error.
+    pub fn hint(&self) -> String {
+        match self {
+            AgentError::AuthFailed { provider, .. } => {
+                let (env_var, config_key) = provider_credentials(provider);
+                format!(
+                    "Check the {env_var} environment variable or the `{config_key}` key in Athena config."
+                )
+            }
+            AgentError::RateLimit { provider, .. } => {
+                format!(
+                    "Check {provider} quota and billing, then retry after the rate limit window."
+                )
+            }
+            AgentError::ServerError { provider, .. } => {
+                format!("Retry the request or check {provider} service status for ongoing outages.")
+            }
+            AgentError::Timeout { provider, .. } => {
+                format!("Retry the {provider} request or reduce the prompt/context size.")
+            }
+            AgentError::InvalidResponse { provider, .. } => {
+                format!("Retry the {provider} request and inspect the raw response if the issue persists.")
+            }
+            AgentError::CircuitOpen { provider } => {
+                format!("Wait for the {provider} circuit breaker cooldown or fix the underlying provider failures.")
+            }
+            AgentError::ActorStopped => {
+                "Restart Athena to recreate the stopped provider actor.".into()
+            }
+            AgentError::Unknown { provider, .. } => {
+                format!("Check the {provider} API configuration and logs for more detail.")
+            }
+        }
+    }
+}
+
+fn provider_credentials(provider: &str) -> (&'static str, &'static str) {
+    if provider.eq_ignore_ascii_case("Anthropic") {
+        ("ANTHROPIC_API_KEY", "anthropic_api_key")
+    } else if provider.eq_ignore_ascii_case("Google") {
+        ("GOOGLE_API_KEY", "google_api_key")
+    } else if provider.eq_ignore_ascii_case("OpenAI") {
+        ("OPENAI_API_KEY", "openai_api_key")
+    } else {
+        ("API_KEY", "api_key")
     }
 }
 

@@ -12,7 +12,13 @@ pub enum ValidationError {
     EmptyField { field: String, hint: String },
 
     /// A field has an invalid value.
-    #[error("Invalid value for '{field}': {reason}")]
+    #[error(
+        "Invalid value for '{field}': {reason}{received_suffix}",
+        received_suffix = received
+            .as_deref()
+            .map(|value| format!(" (received: {value})"))
+            .unwrap_or_default()
+    )]
     InvalidValue {
         field: String,
         reason: String,
@@ -90,7 +96,12 @@ impl ValidationError {
     }
 
     /// Convenience constructor for invalid value errors with raw received content.
-    pub fn invalid_value_with_received(field: &str, reason: &str, received: &str, hint: &str) -> Self {
+    pub fn invalid_value_with_received(
+        field: &str,
+        reason: &str,
+        received: &str,
+        hint: &str,
+    ) -> Self {
         ValidationError::InvalidValue {
             field: field.into(),
             reason: reason.into(),

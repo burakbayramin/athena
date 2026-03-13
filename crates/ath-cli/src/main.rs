@@ -11,7 +11,10 @@ mod run;
 mod verbose;
 
 use anyhow::Result;
+use ath_agents::AgentError;
 use ath_config::ConfigError;
+use ath_orchestrator::error::PhaseRunnerError;
+use ath_types::ValidationError;
 use clap::{CommandFactory, Parser, Subcommand};
 use colored::Colorize;
 
@@ -100,6 +103,50 @@ fn render_subcommand_help(name: &str) -> String {
 /// - If verbose mode was used, show the full error chain
 fn display_error(err: &anyhow::Error) {
     eprint!("{}", render_error_output(err));
+}
+
+fn render_error_output(err: &anyhow::Error) -> String {
+    let mut out = format!("{} {}\n", "Error:".red(), err);
+
+    if let Some(hint) = actionable_hint(err) {
+        out.push_str(&format!("  {} {}\n", "Fix:".yellow(), hint));
+    }
+
+    let mut chain = err.chain().skip(1);
+    if let Some(first) = chain.next() {
+        out.push('\n');
+        out.push_str(&format!("{}\n", "Caused by:".dimmed()));
+        out.push_str(&format!("  0: {first}\n"));
+        for (index, cause) in chain.enumerate() {
+            out.push_str(&format!("  {}: {}\n", index + 1, cause));
+        }
+    }
+
+    out
+}
+
+fn actionable_hint(err: &anyhow::Error) -> Option<String> {
+    if let Some(config_err) = find_cause::<ConfigError>(err) {
+        return Some(config_err.hint().to_string());
+    }
+
+    if let Some(agent_err) = find_cause::<AgentError>(err) {
+        return Some(agent_err.hint());
+    }
+
+    if let Some(phase_err) = find_cause::<PhaseRunnerError>(err) {
+        return Some(phase_err.hint());
+    }
+
+    if let Some(validation_err) = find_cause::<ValidationError>(err) {
+        return Some(validation_err.hint().to_string());
+    }
+
+    None
+}
+
+fn find_cause<T: std::error::Error + 'static>(err: &anyhow::Error) -> Option<&T> {
+    err.chain().find_map(|cause| cause.downcast_ref::<T>())
 }
 
 #[cfg(test)]
@@ -212,12 +259,14 @@ mod error_display {
 
         #[test]
         fn review_failures_show_phase_reviewer_attempt_and_reason() {
-            let err = anyhow::Error::new(ath_orchestrator::error::PhaseRunnerError::MaxRetriesExceeded {
-                phase_name: "build-phase".into(),
-                reviewer: "Google/2.5-pro".into(),
-                attempts: 3,
-                final_reason: "tests still failing".into(),
-            });
+            let err = anyhow::Error::new(
+                ath_orchestrator::error::PhaseRunnerError::MaxRetriesExceeded {
+                    phase_name: "build-phase".into(),
+                    reviewer: "Google/2.5-pro".into(),
+                    attempts: 3,
+                    final_reason: "tests still failing".into(),
+                },
+            );
 
             let output = render_error_output(&err);
             assert!(output.contains("build-phase"));

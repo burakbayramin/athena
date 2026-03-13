@@ -21,17 +21,11 @@ pub enum IsolationError {
 
     /// All agent providers are unavailable (circuit breakers tripped).
     #[error("All agents unavailable: {providers}")]
-    AllAgentsUnavailable {
-        providers: String,
-        hint: String,
-    },
+    AllAgentsUnavailable { providers: String, hint: String },
 
     /// A task has no assigned agent after routing.
     #[error("Task '{task_name}' has no assigned agent")]
-    UnassignedTask {
-        task_name: String,
-        hint: String,
-    },
+    UnassignedTask { task_name: String, hint: String },
 }
 
 impl IsolationError {
@@ -50,10 +44,7 @@ impl IsolationError {
 pub enum PhaseRunnerError {
     /// No reviewer agent is available for the phase.
     #[error("No reviewer available for phase '{phase_name}': {reason}")]
-    NoReviewerAvailable {
-        phase_name: String,
-        reason: String,
-    },
+    NoReviewerAvailable { phase_name: String, reason: String },
 
     /// Maximum retry attempts exhausted for a phase.
     #[error("Phase '{phase_name}' exceeded max retries after review by '{reviewer}' on attempt {attempts}: {final_reason}")]
@@ -74,37 +65,33 @@ pub enum PhaseRunnerError {
 
     /// Failed to dispatch a review request.
     #[error("Review dispatch to '{reviewer}' failed: {reason}")]
-    ReviewDispatchFailed {
-        reviewer: String,
-        reason: String,
-    },
+    ReviewDispatchFailed { reviewer: String, reason: String },
 
     /// Atomic file write failed.
     #[error("Atomic write to '{path}' failed: {reason}")]
-    AtomicWriteFailed {
-        path: String,
-        reason: String,
-    },
+    AtomicWriteFailed { path: String, reason: String },
 }
 
 impl PhaseRunnerError {
     /// Returns actionable guidance for resolving this error.
-    pub fn hint(&self) -> &str {
+    pub fn hint(&self) -> String {
         match self {
             PhaseRunnerError::NoReviewerAvailable { .. } => {
-                "Check that at least one review-capable agent is configured and available"
+                "Check that at least one review-capable agent is configured and available".into()
             }
-            PhaseRunnerError::MaxRetriesExceeded { .. } => {
-                "Review the failing phase's tasks and acceptance criteria; consider manual intervention"
-            }
+            PhaseRunnerError::MaxRetriesExceeded {
+                reviewer, attempts, ..
+            } => format!(
+                "Review the verdict from {reviewer} on attempt {attempts} and adjust the failing phase before retrying."
+            ),
             PhaseRunnerError::TaskExecutionFailed { .. } => {
-                "Check the agent's error output and retry the task, or reassign to a different agent"
+                "Check the agent's error output and retry the task, or reassign to a different agent".into()
             }
             PhaseRunnerError::ReviewDispatchFailed { .. } => {
-                "Verify the reviewer agent is online and accepting requests"
+                "Verify the reviewer agent is online and accepting requests".into()
             }
             PhaseRunnerError::AtomicWriteFailed { .. } => {
-                "Check file permissions and disk space at the target path"
+                "Check file permissions and disk space at the target path".into()
             }
         }
     }
@@ -278,7 +265,11 @@ mod tests {
             },
         ];
         for err in &errors {
-            assert!(!err.hint().is_empty(), "hint should not be empty for {:?}", err);
+            assert!(
+                !err.hint().is_empty(),
+                "hint should not be empty for {:?}",
+                err
+            );
         }
     }
 }

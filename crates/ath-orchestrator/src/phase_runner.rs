@@ -871,6 +871,7 @@ pub async fn run_phase_with_progress(
             RejectOutcome::Failed(_failed) => {
                 return Err(PhaseRunnerError::MaxRetriesExceeded {
                     phase_name: phase.name.clone(),
+                    reviewer: format!("{}/{}", reviewer.provider_name(), reviewer.model()),
                     attempts: attempt,
                     final_reason: verdict.reason,
                 });
@@ -881,6 +882,7 @@ pub async fn run_phase_with_progress(
     // Should not reach here due to typestate, but safety net
     Err(PhaseRunnerError::MaxRetriesExceeded {
         phase_name: phase.name.clone(),
+        reviewer: format!("{}/{}", reviewer.provider_name(), reviewer.model()),
         attempts: 3,
         final_reason: "exhausted all retry attempts".into(),
     })
