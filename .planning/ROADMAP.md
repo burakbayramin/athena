@@ -155,7 +155,7 @@ Plans:
 **Plans**: 4 plans
 
 Plans:
-- [ ] 08-01: clap subcommand definitions — run, init, report with full argument surface
+- [x] 08-01: clap subcommand definitions — run, init, report with full argument surface
 - [ ] 08-02: Progress reporter — indicatif + tracing-indicatif integration for per-phase status display
 - [ ] 08-03: Verbose mode — full agent transcript output behind --verbose flag
 - [ ] 08-04: Dry-run mode wiring — plan output path without execution (integrates Phase 5 dry-run)
@@ -209,6 +209,6 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7 -> 8 -> 9 -> 10
 | 5. Phase Decomposition | 0/3 | Not started | - |
 | 6. Module Isolation | 0/3 | Not started | - |
 | 7. Phase Runner and Review | 4/4 | Complete   | 2026-03-13 |
-| 8. CLI and Progress | 0/4 | Not started | - |
+| 8. CLI and Progress | 1/4 | In Progress |  |
 | 9. Reporting and Error Quality | 0/4 | Not started | - |
 | 10. Parallel Execution | 0/4 | Not started | - |

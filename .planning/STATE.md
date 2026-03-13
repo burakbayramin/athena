@@ -2,62 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: completed
-stopped_at: Phase 8 context gathered
-last_updated: "2026-03-13T08:41:29.926Z"
-last_activity: 2026-03-13 — Completed Plan 07-04 (Agent Coordinator)
+status: in_progress
+stopped_at: Completed 08-01-PLAN.md
+last_updated: "2026-03-13T09:46:58Z"
+last_activity: 2026-03-13 — Completed Plan 08-01 (CLI Surface)
 progress:
   total_phases: 10
   completed_phases: 7
-  total_plans: 24
-  completed_plans: 24
----
-
----
-gsd_state_version: 1.0
-milestone: v1.0
-milestone_name: milestone
-status: completed
-stopped_at: Completed 07-03-PLAN.md
-last_updated: "2026-03-13T07:56:32.345Z"
-last_activity: 2026-03-13 — Completed Plan 07-01 (Phase Runner Typestate)
-progress:
-  total_phases: 10
-  completed_phases: 6
-  total_plans: 24
-  completed_plans: 23
-  percent: 92
----
-
----
-gsd_state_version: 1.0
-milestone: v1.0
-milestone_name: milestone
-status: completed
-stopped_at: Phase 7 context gathered
-last_updated: "2026-03-13T06:49:01.064Z"
-last_activity: 2026-03-12 — Completed Plan 05-03 (CLI Wiring and Plan Display)
-progress:
-  [█████████░] 92%
-  completed_phases: 6
-  total_plans: 20
-  completed_plans: 20
----
-
----
-gsd_state_version: 1.0
-milestone: v1.0
-milestone_name: milestone
-status: completed
-stopped_at: Completed 05-03-PLAN.md
-last_updated: "2026-03-12T21:42:52.642Z"
-last_activity: 2026-03-12 — Completed Plan 05-03 (CLI Wiring and Plan Display)
-progress:
-  total_phases: 10
-  completed_phases: 5
-  total_plans: 17
-  completed_plans: 17
-  percent: 100
+  total_plans: 28
+  completed_plans: 25
+  percent: 89
 ---
 
 # Project State
@@ -67,142 +21,42 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-12)
 
 **Core value:** Intelligent phase analysis — breaking any software project into well-structured, dependency-aware phases with correct agent assignments and parallelization
-**Current focus:** Phase 7: Phase Runner and Review (In Progress)
+**Current focus:** Phase 8: CLI and Progress (In Progress)
 
 ## Current Position
 
-Phase: 7 of 10 (Phase Runner and Review) - COMPLETE
-Plan: 4 of 4 in current phase
-Status: Completed 07-04 (Agent Coordinator)
-Last activity: 2026-03-13 — Completed Plan 07-04 (Agent Coordinator)
-
-Progress: [██████████] 96%
+Phase: 8 of 10 (CLI and Progress)
+Plan: 2 of 4 in current phase
+Status: Ready for 08-02 (Progress Reporter)
+Last activity: 2026-03-13 — Completed Plan 08-01 (CLI Surface)
+Progress: [█████████░] 89%
 
 ## Performance Metrics
 
-**Velocity:**
-- Total plans completed: 24
+- Total plans completed: 25
 - Average duration: 4 min
-- Total execution time: 1.25 hours
+- Total execution time: 1.5 hours
+- Most recent plan: 08-01 (16 min, 2 tasks, 4 files)
 
-**By Phase:**
+## Recent Decisions
 
-| Phase | Plans | Total | Avg/Plan |
-|-------|-------|-------|----------|
-| 01-foundation | 4 | 12 min | 3 min |
-| 02-agent-clients | 3 | 20 min | 7 min |
-| 03-git-layer | 3 | 11 min | 4 min |
-| 04-input-parsing | 4 | 14 min | 4 min |
-| 05-phase-decomposition | 3/3 | 12 min | 4 min |
+- 07-04: AgentCoordinator is thin orchestration over `run_phase` and fails fast on the first phase error
+- 07-04: `write_files` creates parent directories and writes `FileOutput` content directly to `output_dir/path`
+- 08-01: `ConfigStore` loading moved into `run_command` so plain `ath` can show help without configured providers
+- 08-01: `ath run --dry-run` fails clearly until the local no-cost plan cache exists
+- 08-01: `ath report` accepts an optional explicit target and defaults its contract to the latest run
 
-**Recent Trend:**
-- Last 5 plans: 04-02 (4 min), 04-04 (4 min), 05-01 (4 min), 05-02 (5 min), 05-03 (3 min)
-- Trend: Steady
+## Pending Todos
 
-*Updated after each plan completion*
-| Phase 02 P01 | 5min | 2 tasks | 7 files |
-| Phase 02 P02 | 10min | 2 tasks | 8 files |
-| Phase 02 P03 | 5min | 2 tasks | 1 files |
-| Phase 03 P01 | 3min | 2 tasks | 7 files |
-| Phase 03 P02 | 4min | 2 tasks | 3 files |
-| Phase 03 P03 | 4min | 2 tasks | 5 files |
-| Phase 04 P01 | 6min | 2 tasks | 12 files |
-| Phase 04 P02 | 4min | 2 tasks | 5 files |
-| Phase 04 P03 | 4min | 2 tasks | 4 files |
-| Phase 04 P04 | 4min | 1 tasks | 2 files |
-| Phase 05 P01 | 4min | 2 tasks | 7 files |
-| Phase 05 P02 | 5min | 2 tasks | 3 files |
-| Phase 05 P03 | 3min | 2 tasks | 3 files |
-| Phase 06 P01 | 4min | 2 tasks | 8 files |
-| Phase 06 P03 | 3min | 2 tasks | 2 files |
-| Phase 06 P02 | 3min | 2 tasks | 1 files |
-| Phase 07 P01 | 8min | 2 tasks | 5 files |
-| Phase 07 P02 | 9min | 2 tasks | 2 files |
-| Phase 07 P03 | 6min | 2 tasks | 1 files |
-| Phase 07 P04 | 6min | 2 tasks | 3 files |
+None.
 
-## Accumulated Context
+## Blockers/Concerns
 
-### Decisions
-
-Decisions are logged in PROJECT.md Key Decisions table.
-Recent decisions affecting current work:
-
-- Foundation: genai 0.5 is the unified provider client — watch for JSON mode gaps per provider (fallback: direct reqwest)
-- Foundation: anyhow at binary boundary, thiserror for internal domain errors
-- Foundation: Typed inter-agent schemas (PLAN-04) built in Phase 1 — prevents #1 multi-agent failure mode
-- 01-01: Used workspace.package for version/edition inheritance across all crates
-- 01-01: Internal crates listed in [workspace.dependencies] for consistent path references
-- 01-02: TokenUsage in phase.rs (audit context), AgentResponse uses simple u64 token fields
-- 01-02: All schema types derive Debug, Clone, Serialize, Deserialize, PartialEq
-- 01-02: validate() pattern returns Result<(), ValidationError> with fix hints
-- 01-03: RawFileConfig uses nested Option structs matching TOML section structure
-- 01-03: Env var loading is infallible -- missing vars produce None, never errors
-- 01-03: load_from_layers() is public for testability without real files or env vars
-- [Phase 01-foundation]: main() returns unit with process::exit; run() returns Result for clean error display control
-- 02-01: Renamed AgentError::Unknown.source to .message to avoid thiserror 2.0 #[source] attribute conflict
-- 02-01: Used tokio::time::Instant for CircuitBreaker for deterministic testing with start_paused
-- 02-01: MockBackend uses enum MockMode (Sequenced/AlwaysOk/AlwaysFail) for mode selection
-- 02-01: AgentError is Debug only (not Clone) -- errors flow through Result, not stored in collections
-- [Phase 02]: Renamed AgentError::Unknown.source to .message for thiserror 2.0 compatibility
-- 02-02: Manual retry loop instead of backon Retryable combinator to honor Retry-After from RateLimit errors
-- 02-02: genai AuthResolver closure captures cloned ConfigStore keys, matches on adapter_kind
-- 02-02: AtomicBool flag for non-blocking is_available() without channel round-trip
-- 02-02: genai does not expose Retry-After headers; retry_after always None from classify_error
-- 02-03: Integration tests use MockBackend exclusively -- no real API calls needed for verification
-- 03-01: Renamed TaskJoin.source to .message for thiserror 2.0 compatibility (same pattern as 02-01)
-- 03-01: repo_handle() exposed as pub(crate) for test access to inner Repository
-- 03-02: Used index.get_path to check tracked status before remove_path -- remove_path silently succeeds on untracked files in empty repos
-- 03-02: Author signature hardcoded to Athena, committer falls back to Athena if git config unavailable
-- [Phase 03]: AsyncGitLayer owns GitLayer directly -- GitLayer is Clone via Arc<Mutex<Repository>>
-- [Phase 03]: Used treebuilder API for conflict test to avoid working-tree mutations blocking git2 merge
-- 04-01: Added serde(default) on AgentRequest.json_schema for backward-compatible deserialization of old JSON without the field
-- [Phase 04-01]: Added serde(default) on AgentRequest.json_schema for backward-compatible deserialization of old JSON without the field
-- 04-02: request_builder closure pattern allows all 3 input modes to share parse_to_project_spec retry logic
-- 04-02: json_schema threaded through run_with_retry_and_breaker to call_provider, enabling per-request structured output
-- [Phase 04]: scan_codebase is sync (std::fs), called from async via spawn_blocking
-- [Phase 04]: Key file detection uses filename matching + relative path patterns for entry points
-- 04-04: Error mapping via anyhow::anyhow! for both AgentError and InputError -- preserves human-readable messages without adding From impls
-- 05-01: Kahn's algorithm for topological sort with deterministic output via sorted BFS queue
-- 05-01: DFS color marking (White/Gray/Black) for cycle detection with backtrack extraction
-- 05-01: ContractLabel as String type alias for flexibility with LLM-generated labels
-- [Phase 05]: DAG algorithms as pure functions on &[PhaseSpec] -- no I/O, fully testable without mocks
-- 05-02: BFS transitive closure for contract satisfaction -- Phase C can consume contracts from Phase A via Phase B
-- 05-02: RawPlanResponse wrapper for LLM deserialization -- only phases array, computed fields added post-validation
-- 05-02: Validation error feedback capped at 5 errors to avoid prompt bloat on retry
-- 05-03: format_execution_plan writes to &mut impl Write buffer for testability; display_execution_plan wraps with colored stdout
-- 05-03: Parallel groups with >1 phase highlighted with [parallel] indicator and green coloring
-- [Phase 06]: Static routing table with 15 hardcoded tag-to-agent mappings for v1
-- [Phase 06]: Priority tiebreaking: Claude(0) > Gemini(1) > Codex(2)
-- [Phase 06]: Default agent is Claude for unrecognized skill tags
-- [Phase 06]: Exact file path matching only -- no directory-level overlap detection
-- [Phase 06]: Within-phase sequential tasks allowed to share files
-- [Phase 06]: Audit warnings are informational, never block execution
-- [Phase 06]: Discriminant-based vote counting via std::mem::discriminant for variant-only comparison
-- [Phase 06]: Fail-fast batch routing in assign_all_tasks -- first error stops processing
-- 07-01: StateData struct avoids generic proliferation -- single struct with Option fields per state
-- 07-01: PhaseStatus uses serde tag='status' for clean JSON discrimination
-- 07-01: Attempt numbering is 1-based; Retrying carries the NEXT attempt number
-- [Phase 07]: Imported TaskOutput/FileOutput from phase_runner.rs (Plan 01) instead of defining locally in review.rs
-- [Phase 07]: ReviewError is self-contained enum decoupled from PhaseRunnerError -- coordinator maps between them
-- [Phase 07]: AgentRegistry uses Discriminant<AgentKind> as key so all models of same provider share one backend
-- [Phase 07]: run_phase accepts write_files closure for testability; contributions accumulate across retries
-- 07-04: AgentCoordinator is thin orchestration over run_phase -- owns registry, output_dir, optional git
-- 07-04: write_files closure creates parent dirs and writes FileOutput content to output_dir/path
-- 07-04: Fail-fast on first phase error, consistent with Phase 6 pattern
-
-### Pending Todos
-
-None yet.
-
-### Blockers/Concerns
-
-- Phase 5 (PhasePlanner): LLM-assisted DAG decomposition prompt design has no public precedent — plan for prompt iteration as versioned code artifacts
-- Phase 7 (ReviewEngine): Cross-vendor review pairing effectiveness is unquantified — initial routing table is a reasonable default, monitor results
-- Phase 10 (Parallel/Worktrees): git2 worktree lifecycle in async Rust context has limited documented examples
+- Phase 8 plan 02 still needs a progress event seam in the orchestrator and CLI
+- Phase 10: git2 worktree lifecycle in async Rust context has limited documented examples
 
 ## Session Continuity
 
-Last session: 2026-03-13T08:41:29.918Z
-Stopped at: Phase 8 context gathered
-Resume file: .planning/phases/08-cli-and-progress/08-CONTEXT.md
+Last session: 2026-03-13T09:46:58Z
+Stopped at: Completed 08-01-PLAN.md
+Resume file: .planning/phases/08-cli-and-progress/08-02-PLAN.md
