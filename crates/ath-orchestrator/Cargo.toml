@@ -5,3 +5,7 @@ edition.workspace = true
 
 [dependencies]
 ath-types = { path = "../ath-types" }
+ath-agents = { path = "../ath-agents" }
+thiserror.workspace = true
+serde.workspace = true
+serde_json.workspace = true

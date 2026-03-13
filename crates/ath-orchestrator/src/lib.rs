@@ -5,3 +5,6 @@
 //! The conductor: dispatches agents, manages phase execution,
 //! collects results, triggers reviews, and maintains the
 //! complete audit trail of a project run.
+
+pub mod error;
+pub mod taxonomy;

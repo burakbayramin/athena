@@ -6,6 +6,7 @@
 
 use serde::{Deserialize, Serialize};
 
+use crate::agent::AgentKind;
 use crate::project::SkillTag;
 
 /// A named contract label for inter-phase produces/consumes tracking.
@@ -26,6 +27,9 @@ pub struct TaskSpec {
     pub acceptance_criteria: Vec<String>,
     /// Indices into the ProjectSpec.goals array that this task fulfills.
     pub goal_indices: Vec<usize>,
+    /// Agent assigned to execute this task (None before routing, Some after).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub assigned_agent: Option<AgentKind>,
 }
 
 /// A phase in the execution plan.
@@ -72,6 +76,7 @@ mod tests {
             expected_output_files: vec!["src/api.rs".into()],
             acceptance_criteria: vec!["All endpoints return JSON".into()],
             goal_indices: vec![0, 1],
+            assigned_agent: None,
         }
     }
 
@@ -116,6 +121,38 @@ mod tests {
     fn task_spec_round_trip() {
         let task = sample_task();
         let json = serde_json::to_string(&task).expect("serialize");
+        let deserialized: TaskSpec = serde_json::from_str(&json).expect("deserialize");
+        assert_eq!(task, deserialized);
+    }
+
+    #[test]
+    fn task_spec_assigned_agent_none_omitted_in_json() {
+        let task = sample_task();
+        let json = serde_json::to_string(&task).expect("serialize");
+        assert!(!json.contains("assigned_agent"), "None should be skipped in serialization");
+    }
+
+    #[test]
+    fn task_spec_without_assigned_agent_deserializes() {
+        // Simulate old JSON without assigned_agent field
+        let json = r#"{
+            "name": "Test",
+            "description": "A test task",
+            "skill_tags": [],
+            "expected_output_files": [],
+            "acceptance_criteria": [],
+            "goal_indices": []
+        }"#;
+        let task: TaskSpec = serde_json::from_str(json).expect("backward compat deserialize");
+        assert_eq!(task.assigned_agent, None);
+    }
+
+    #[test]
+    fn task_spec_assigned_agent_round_trip() {
+        let mut task = sample_task();
+        task.assigned_agent = Some(AgentKind::Claude("opus-4".into()));
+        let json = serde_json::to_string(&task).expect("serialize");
+        assert!(json.contains("assigned_agent"));
         let deserialized: TaskSpec = serde_json::from_str(&json).expect("deserialize");
         assert_eq!(task, deserialized);
     }

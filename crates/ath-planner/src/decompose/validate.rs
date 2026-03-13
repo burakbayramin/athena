@@ -221,6 +221,7 @@ mod tests {
             expected_output_files: vec![],
             acceptance_criteria: vec![],
             goal_indices,
+            assigned_agent: None,
         }
     }
 
