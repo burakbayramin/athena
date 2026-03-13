@@ -32,7 +32,7 @@
 
 - [x] **QUAL-01**: Each phase output is cross-reviewed by a different AI agent (not the author)
 - [x] **QUAL-02**: Review gate blocks phase progression until review passes
-- [ ] **QUAL-03**: On review failure, Athena auto-retries with reviewer feedback (max 3 attempts)
+- [x] **QUAL-03**: On review failure, Athena auto-retries with reviewer feedback (max 3 attempts)
 - [ ] **QUAL-04**: Athena tracks and reports token usage and estimated cost per phase per agent
 
 ### Output
@@ -89,7 +89,7 @@
 | ORCH-05 | Phase 2 | Complete |
 | QUAL-01 | Phase 7 | Complete |
 | QUAL-02 | Phase 7 | Complete |
-| QUAL-03 | Phase 7 | Pending |
+| QUAL-03 | Phase 7 | Complete |
 | QUAL-04 | Phase 9 | Pending |
 | OUTP-01 | Phase 3 | Complete |
 | OUTP-02 | Phase 8 | Pending |
