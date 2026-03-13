@@ -15,6 +15,7 @@
 //! - [`MemoryError`] — Error enum with actionable [`MemoryError::hint()`] messages
 
 pub mod error;
+pub mod extract;
 pub mod index;
 pub mod keyword;
 pub mod observe;
@@ -31,5 +32,8 @@ pub use types::{LayeredContent, MemoryHit};
 pub use observe::{
     FileOpKind, Observation, ObservationBuffer, ObservationReader, ObservationType,
     ObservationWriter,
+};
+pub use extract::{
+    ExtractionConfig, ExtractionLlm, ExtractionResult, MemoryExtractor, RunSummary,
 };
 pub use uri::VikingUri;

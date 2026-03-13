@@ -85,4 +85,4 @@ Durable run reports persisted at `.ath/runs/<run-id>/report.json` with cost esti
 | M002 | Memory Layer | 🔄 In Progress | — |
 
 ---
-*Last updated: 2026-03-14 — M002/S02 (Observation System) complete*
+*Last updated: 2026-03-14 — M002/S03 (Memory Extraction Pipeline) complete*

@@ -55,7 +55,7 @@ This milestone is complete only when all are true:
 - [x] **S02: Observation System** `risk:medium` `depends:[]`
   > After this: Observation types, append-only JSONL writer, and observation buffer are implemented — proven by unit tests that capture and serialize observation events
 
-- [ ] **S03: Memory Extraction Pipeline** `risk:high` `depends:[S01,S02]`
+- [x] **S03: Memory Extraction Pipeline** `risk:high` `depends:[S01,S02]`
   > After this: Post-run extraction reads observations, calls LLM to summarize, writes structured entries to Viking store, and updates vector index — proven by integration test with fixture observations
 
 - [ ] **S04: Orchestrator Integration (Observation + Injection)** `risk:high` `depends:[S01,S02,S03]`

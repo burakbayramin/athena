@@ -76,6 +76,15 @@ pub enum MemoryError {
         /// Description of the failure.
         message: String,
     },
+
+    /// An extraction stage failed (e.g., malformed LLM response, parse error).
+    #[error("Extraction error in stage '{stage}': {message}")]
+    ExtractionError {
+        /// Which extraction stage failed (e.g., "run_summary", "conventions").
+        stage: String,
+        /// Description of the failure.
+        message: String,
+    },
 }
 
 impl MemoryError {
@@ -105,6 +114,9 @@ impl MemoryError {
             }
             MemoryError::ObservationReadError { .. } => {
                 "Inspect the JSONL file for corruption or encoding issues — each line must be valid JSON"
+            }
+            MemoryError::ExtractionError { .. } => {
+                "The LLM response may be malformed — check the tracing logs for the raw response, then retry or adjust the prompt"
             }
         }
     }
@@ -202,6 +214,10 @@ mod tests {
             MemoryError::ObservationReadError {
                 path: "x".into(),
                 message: "y".into(),
+            },
+            MemoryError::ExtractionError {
+                stage: "run_summary".into(),
+                message: "malformed JSON".into(),
             },
         ];
 

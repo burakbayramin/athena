@@ -10,6 +10,7 @@ thiserror.workspace = true
 uuid.workspace = true
 chrono.workspace = true
 tracing.workspace = true
+async-trait.workspace = true
 ath-types = { path = "../ath-types" }
 hnsw = { version = "0.11", features = ["serde1"] }
 space = "0.17"
@@ -17,4 +18,5 @@ rand_pcg = "0.3"
 
 [dev-dependencies]
 tempfile.workspace = true
+tokio = { workspace = true, features = ["rt-multi-thread", "macros"] }
 rand = "0.8"
