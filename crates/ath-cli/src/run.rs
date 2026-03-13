@@ -4,14 +4,14 @@ use std::sync::Arc;
 use anyhow::{anyhow, Result};
 use ath_agents::{AgentBackend, ClaudeHandle, CodexHandle, GeminiHandle};
 use ath_config::ConfigStore;
-use ath_planner::decompose::{decompose_project_spec, display_execution_plan};
-use ath_planner::input::{display_project_spec_summary, parse_input, resolve_input_mode};
 use ath_orchestrator::coordinator::AgentCoordinator;
 use ath_orchestrator::isolation::check_isolation;
 use ath_orchestrator::phase_runner::AgentRegistry;
 use ath_orchestrator::progress::SharedProgressObserver;
 use ath_orchestrator::router::assign_all_tasks;
 use ath_orchestrator::taxonomy;
+use ath_planner::decompose::{decompose_project_spec, display_execution_plan};
+use ath_planner::input::{display_project_spec_summary, parse_input, resolve_input_mode};
 use ath_types::agent::AgentKind;
 use ath_types::plan::{ExecutionPlan, PhaseSpec, TaskSpec};
 use clap::Args;
@@ -42,7 +42,8 @@ pub(crate) struct RunArgs {
 
 pub(crate) async fn run_command(args: RunArgs, global: GlobalArgs) -> Result<()> {
     if args.dry_run {
-        anyhow::bail!("{}", dry_run_placeholder_message());
+        let project_dir = std::env::current_dir().map_err(|e| anyhow!("{e}"))?;
+        return crate::dry_run::execute(&project_dir);
     }
 
     let config = ConfigStore::load().map_err(anyhow::Error::new)?;
@@ -73,6 +74,8 @@ pub(crate) async fn run_command(args: RunArgs, global: GlobalArgs) -> Result<()>
     let mut plan = plan;
     let registry = build_agent_registry(&config)?;
     assign_agents_and_check_isolation(&mut plan, |kind| registry.get(kind).is_some())?;
+    let output_dir = std::env::current_dir().map_err(|e| anyhow!("{e}"))?;
+    crate::dry_run::write_plan_cache(&output_dir, &plan)?;
 
     display_execution_plan(&plan, &warnings);
 
@@ -87,7 +90,6 @@ pub(crate) async fn run_command(args: RunArgs, global: GlobalArgs) -> Result<()>
     };
     let observer: SharedProgressObserver =
         Arc::new(CliObserver::new(reporter.clone(), verbose_sink));
-    let output_dir = std::env::current_dir().map_err(|e| anyhow!("{e}"))?;
     let coordinator = AgentCoordinator::new(registry, output_dir, None);
 
     let records = coordinator
@@ -101,10 +103,6 @@ pub(crate) async fn run_command(args: RunArgs, global: GlobalArgs) -> Result<()>
     ));
 
     Ok(())
-}
-
-pub(crate) fn dry_run_placeholder_message() -> &'static str {
-    "`ath run --dry-run` is recognized, but the local no-cost plan preview is not wired yet."
 }
 
 fn build_planning_backend(config: &ConfigStore) -> Result<Arc<dyn AgentBackend>> {
@@ -156,9 +154,15 @@ fn build_agent_registry(config: &ConfigStore) -> Result<AgentRegistry> {
         );
     }
 
-    if registry.get(&AgentKind::Claude("placeholder".into())).is_none()
-        && registry.get(&AgentKind::Gemini("placeholder".into())).is_none()
-        && registry.get(&AgentKind::Codex("placeholder".into())).is_none()
+    if registry
+        .get(&AgentKind::Claude("placeholder".into()))
+        .is_none()
+        && registry
+            .get(&AgentKind::Gemini("placeholder".into()))
+            .is_none()
+        && registry
+            .get(&AgentKind::Codex("placeholder".into()))
+            .is_none()
     {
         anyhow::bail!("No execution providers are available. Configure at least one provider.");
     }
@@ -222,7 +226,10 @@ mod tests {
                 .iter()
                 .map(|tag| SkillTag((*tag).to_string()))
                 .collect(),
-            expected_output_files: expected_files.iter().map(|path| (*path).to_string()).collect(),
+            expected_output_files: expected_files
+                .iter()
+                .map(|path| (*path).to_string())
+                .collect(),
             acceptance_criteria: vec![],
             goal_indices: vec![],
             assigned_agent: None,
@@ -294,9 +301,9 @@ mod tests {
             err.to_string().contains("src/main.rs"),
             "isolation error should mention the conflicting file"
         );
-        assert!(plan.phases.iter().all(|phase| phase
-            .tasks
+        assert!(plan
+            .phases
             .iter()
-            .all(|task| task.assigned_agent.is_some())));
+            .all(|phase| phase.tasks.iter().all(|task| task.assigned_agent.is_some())));
     }
 }

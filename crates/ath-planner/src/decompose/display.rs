@@ -6,8 +6,8 @@
 
 use colored::Colorize;
 
-use ath_types::plan::ExecutionPlan;
 use super::validate::PlanWarning;
+use ath_types::plan::ExecutionPlan;
 
 /// Format an execution plan into a writable buffer (for testability).
 ///
@@ -40,7 +40,13 @@ pub fn format_execution_plan(
 
         // Tasks
         let task_names: Vec<&str> = phase.tasks.iter().map(|t| t.name.as_str()).collect();
-        writeln!(out, "  Tasks: {} ({})", phase.tasks.len(), task_names.join(", "))?;
+        writeln!(
+            out,
+            "  Tasks: {} ({})",
+            phase.tasks.len(),
+            task_names.join(", ")
+        )?;
+        write_assigned_agents_plain(phase, out)?;
 
         // Dependencies
         if phase.depends_on.is_empty() {
@@ -72,7 +78,12 @@ pub fn format_execution_plan(
     for (i, group) in plan.parallel_groups.iter().enumerate() {
         let ids: Vec<String> = group.iter().map(|id| id.to_string()).collect();
         if group.len() > 1 {
-            writeln!(out, "  Wave {}: phases {} [parallel]", i + 1, ids.join(", "))?;
+            writeln!(
+                out,
+                "  Wave {}: phases {} [parallel]",
+                i + 1,
+                ids.join(", ")
+            )?;
         } else {
             writeln!(out, "  Wave {}: phases {}", i + 1, ids.join(", "))?;
         }
@@ -136,6 +147,7 @@ pub fn display_execution_plan(plan: &ExecutionPlan, warnings: &[PlanWarning]) {
 
         let task_names: Vec<&str> = phase.tasks.iter().map(|t| t.name.as_str()).collect();
         println!("  Tasks: {} ({})", phase.tasks.len(), task_names.join(", "));
+        display_assigned_agents(phase);
 
         if phase.depends_on.is_empty() {
             println!("  Depends on: {}", "none".dimmed());
@@ -206,6 +218,48 @@ pub fn display_execution_plan(plan: &ExecutionPlan, warnings: &[PlanWarning]) {
                     );
                 }
             }
+        }
+    }
+}
+
+fn write_assigned_agents_plain(
+    phase: &ath_types::plan::PhaseSpec,
+    out: &mut impl std::fmt::Write,
+) -> std::fmt::Result {
+    if !phase.tasks.iter().any(|task| task.assigned_agent.is_some()) {
+        return Ok(());
+    }
+
+    writeln!(out, "  Assigned agents:")?;
+    for task in &phase.tasks {
+        if let Some(agent) = &task.assigned_agent {
+            writeln!(
+                out,
+                "    - {} -> {}/{}",
+                task.name,
+                agent.provider_name(),
+                agent.model()
+            )?;
+        }
+    }
+
+    Ok(())
+}
+
+fn display_assigned_agents(phase: &ath_types::plan::PhaseSpec) {
+    if !phase.tasks.iter().any(|task| task.assigned_agent.is_some()) {
+        return;
+    }
+
+    println!("  {}", "Assigned agents:".bold());
+    for task in &phase.tasks {
+        if let Some(agent) = &task.assigned_agent {
+            println!(
+                "    - {} -> {}/{}",
+                task.name,
+                agent.provider_name(),
+                agent.model()
+            );
         }
     }
 }
@@ -333,8 +387,14 @@ mod tests {
         let mut out = String::new();
         format_execution_plan(&plan, &[], &mut out).unwrap();
 
-        assert!(out.contains("Depends on: none"), "Phase 1 should show 'Depends on: none'");
-        assert!(out.contains("Depends on: 1"), "Phase 2 should show 'Depends on: 1'");
+        assert!(
+            out.contains("Depends on: none"),
+            "Phase 1 should show 'Depends on: none'"
+        );
+        assert!(
+            out.contains("Depends on: 1"),
+            "Phase 2 should show 'Depends on: 1'"
+        );
     }
 
     #[test]
@@ -345,7 +405,10 @@ mod tests {
 
         assert!(out.contains("Wave 1:"), "should contain Wave 1:");
         assert!(out.contains("Wave 2:"), "should contain Wave 2:");
-        assert!(out.contains("[parallel]"), "multi-phase group should show [parallel]");
+        assert!(
+            out.contains("[parallel]"),
+            "multi-phase group should show [parallel]"
+        );
     }
 
     #[test]
@@ -355,7 +418,28 @@ mod tests {
         format_execution_plan(&plan, &[], &mut out).unwrap();
 
         assert!(out.contains("Tasks: 2"), "Phase 1 should show 2 tasks");
-        assert!(out.contains("Init, Config"), "Phase 1 should list task names");
+        assert!(
+            out.contains("Init, Config"),
+            "Phase 1 should list task names"
+        );
+    }
+
+    #[test]
+    fn output_contains_assigned_agents_when_present() {
+        let mut plan = make_test_plan();
+        plan.phases[0].tasks[0].assigned_agent =
+            Some(ath_types::agent::AgentKind::Claude("opus-4".into()));
+        let mut out = String::new();
+        format_execution_plan(&plan, &[], &mut out).unwrap();
+
+        assert!(
+            out.contains("Assigned agents:"),
+            "should include assigned agents section"
+        );
+        assert!(
+            out.contains("Init -> Anthropic/opus-4"),
+            "should show assigned agent for routed tasks"
+        );
     }
 
     #[test]
@@ -364,8 +448,14 @@ mod tests {
         let mut out = String::new();
         format_execution_plan(&plan, &[], &mut out).unwrap();
 
-        assert!(out.contains("Produces: project-structure"), "Phase 1 produces project-structure");
-        assert!(out.contains("Consumes: project-structure"), "Phase 2 consumes project-structure");
+        assert!(
+            out.contains("Produces: project-structure"),
+            "Phase 1 produces project-structure"
+        );
+        assert!(
+            out.contains("Consumes: project-structure"),
+            "Phase 2 consumes project-structure"
+        );
     }
 
     #[test]
@@ -400,7 +490,10 @@ mod tests {
         let mut out = String::new();
         format_execution_plan(&plan, &[], &mut out).unwrap();
 
-        assert!(!out.contains("Warnings:"), "should not contain Warnings section when empty");
+        assert!(
+            !out.contains("Warnings:"),
+            "should not contain Warnings section when empty"
+        );
     }
 
     #[test]
@@ -410,7 +503,13 @@ mod tests {
         format_execution_plan(&plan, &[], &mut out).unwrap();
 
         assert!(out.contains("3 phases"), "header should show phase count");
-        assert!(out.contains("2 parallel groups"), "header should show group count");
-        assert!(out.contains("critical path: 2"), "header should show critical path length");
+        assert!(
+            out.contains("2 parallel groups"),
+            "header should show group count"
+        );
+        assert!(
+            out.contains("critical path: 2"),
+            "header should show critical path length"
+        );
     }
 }
