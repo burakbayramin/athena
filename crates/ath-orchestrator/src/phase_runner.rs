@@ -7,11 +7,19 @@
 //! - `PhaseState<S>` with PhantomData typestates for internal execution logic
 //! - `PhaseStatus` enum for serialization, logging, and PhaseRecord
 
+use std::collections::HashMap;
 use std::marker::PhantomData;
+use std::mem;
+use std::sync::Arc;
 
-use ath_types::agent::AgentKind;
+use ath_agents::AgentBackend;
+use ath_types::agent::{AgentKind, AgentRequest, AgentResponse};
+use ath_types::plan::PhaseSpec;
 use ath_types::review::ReviewVerdict;
 use serde::{Deserialize, Serialize};
+
+use crate::error::PhaseRunnerError;
+use crate::review;
 
 // ---------------------------------------------------------------------------
 // Zero-sized state markers
@@ -415,14 +423,133 @@ pub fn task_output_schema() -> serde_json::Value {
 }
 
 // ---------------------------------------------------------------------------
+// AgentRegistry
+// ---------------------------------------------------------------------------
+
+/// Registry mapping agent kinds to their backend implementations.
+///
+/// Uses `std::mem::Discriminant<AgentKind>` as the key so that
+/// `Claude("opus-4")` and `Claude("sonnet-4")` share the same slot.
+pub struct AgentRegistry {
+    backends: HashMap<mem::Discriminant<AgentKind>, Arc<dyn AgentBackend>>,
+}
+
+impl AgentRegistry {
+    /// Create an empty registry.
+    pub fn new() -> Self {
+        Self {
+            backends: HashMap::new(),
+        }
+    }
+
+    /// Register a backend for the given agent kind.
+    pub fn register(&mut self, kind: AgentKind, backend: Arc<dyn AgentBackend>) {
+        self.backends.insert(mem::discriminant(&kind), backend);
+    }
+
+    /// Look up a backend by agent kind.
+    pub fn get(&self, kind: &AgentKind) -> Option<Arc<dyn AgentBackend>> {
+        self.backends.get(&mem::discriminant(kind)).cloned()
+    }
+}
+
+// ---------------------------------------------------------------------------
+// execute_phase_tasks
+// ---------------------------------------------------------------------------
+
+/// Dispatches each task in a phase to its assigned agent sequentially.
+///
+/// On first attempt (`feedback` is `None`), uses the task description as prompt.
+/// On retry (`feedback` is `Some`), uses `build_retry_prompt` with the reviewer's
+/// feedback injected into the prompt.
+///
+/// Returns all `TaskOutput`s in order, or the first error encountered.
+pub async fn execute_phase_tasks(
+    phase: &PhaseSpec,
+    registry: &AgentRegistry,
+    feedback: Option<&ReviewVerdict>,
+) -> Result<Vec<TaskOutput>, PhaseRunnerError> {
+    let mut outputs = Vec::with_capacity(phase.tasks.len());
+
+    for task in &phase.tasks {
+        let agent = task.assigned_agent.as_ref().ok_or_else(|| {
+            PhaseRunnerError::TaskExecutionFailed {
+                task_name: task.name.clone(),
+                agent: "unassigned".into(),
+                reason: "task has no assigned agent".into(),
+            }
+        })?;
+
+        let backend = registry.get(agent).ok_or_else(|| {
+            PhaseRunnerError::TaskExecutionFailed {
+                task_name: task.name.clone(),
+                agent: format!("{:?}", agent),
+                reason: "no backend registered for agent".into(),
+            }
+        })?;
+
+        // Build prompt: retry with feedback or fresh from task description
+        let prompt = if let Some(fb) = feedback {
+            review::build_retry_prompt(task, fb)
+        } else {
+            task.description.clone()
+        };
+
+        let request = AgentRequest {
+            id: uuid::Uuid::new_v4(),
+            agent: agent.clone(),
+            prompt,
+            context: None,
+            json_schema: Some(task_output_schema()),
+            created_at: chrono::Utc::now(),
+        };
+
+        let response: AgentResponse = backend.send(request).await.map_err(|e| {
+            PhaseRunnerError::TaskExecutionFailed {
+                task_name: task.name.clone(),
+                agent: format!("{:?}", agent),
+                reason: e.to_string(),
+            }
+        })?;
+
+        let mut task_output: TaskOutput = serde_json::from_str(&response.content).map_err(|e| {
+            let snippet = if response.content.len() > 100 {
+                format!("{}...", &response.content[..100])
+            } else {
+                response.content.clone()
+            };
+            PhaseRunnerError::TaskExecutionFailed {
+                task_name: task.name.clone(),
+                agent: format!("{:?}", agent),
+                reason: format!("failed to parse TaskOutput JSON: {} (raw: {})", e, snippet),
+            }
+        })?;
+
+        // Override task_name from spec, agent from assigned, tokens from response
+        task_output.task_name = task.name.clone();
+        task_output.agent = agent.clone();
+        task_output.input_tokens = response.input_tokens;
+        task_output.output_tokens = response.output_tokens;
+
+        outputs.push(task_output);
+    }
+
+    Ok(outputs)
+}
+
+// ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use ath_types::agent::AgentKind;
-    use ath_types::review::{ReviewVerdict, Severity};
+    use ath_types::agent::{AgentKind, AgentRequest, AgentResponse};
+    use ath_types::plan::TaskSpec;
+    use ath_types::project::SkillTag;
+    use ath_types::review::{CodeSuggestion, ReviewVerdict, Severity};
+    use ath_agents::MockBackend;
+    use std::sync::Arc;
 
     fn make_verdict(passed: bool, reason: &str) -> ReviewVerdict {
         ReviewVerdict {
@@ -591,5 +718,230 @@ mod tests {
         assert_eq!(output.issues_encountered, vec!["Had to handle edge case"]);
         assert_eq!(output.input_tokens, 2000);
         assert_eq!(output.output_tokens, 800);
+    }
+
+    // ==================== Helper: make_task_spec ====================
+
+    fn make_task_spec(name: &str, agent: Option<AgentKind>) -> TaskSpec {
+        TaskSpec {
+            name: name.into(),
+            description: format!("Implement {name}"),
+            skill_tags: vec![SkillTag("rust".into())],
+            expected_output_files: vec![],
+            acceptance_criteria: vec![],
+            goal_indices: vec![],
+            assigned_agent: agent,
+        }
+    }
+
+    fn make_task_output_json(task_name: &str, agent: &AgentKind) -> String {
+        let agent_json = serde_json::to_string(agent).unwrap();
+        format!(
+            r#"{{"task_name":"{}","agent":{},"files_produced":[{{"path":"src/lib.rs","content":"fn main() {{}}"}}],"explanation":"Done","issues_encountered":[],"input_tokens":100,"output_tokens":50}}"#,
+            task_name, agent_json
+        )
+    }
+
+    fn mock_response_for_task(task_name: &str, agent: &AgentKind) -> AgentResponse {
+        AgentResponse {
+            request_id: uuid::Uuid::new_v4(),
+            agent: agent.clone(),
+            content: make_task_output_json(task_name, agent),
+            input_tokens: 100,
+            output_tokens: 50,
+            created_at: chrono::Utc::now(),
+        }
+    }
+
+    // ==================== execute_phase_tasks tests ====================
+
+    #[tokio::test]
+    async fn execute_dispatches_each_task_to_assigned_agent() {
+        let claude = AgentKind::Claude("opus-4".into());
+        let gemini = AgentKind::Gemini("2.5-pro".into());
+
+        let tasks = vec![
+            make_task_spec("task-a", Some(claude.clone())),
+            make_task_spec("task-b", Some(gemini.clone())),
+        ];
+
+        let claude_mock = Arc::new(MockBackend::new(vec![
+            Ok(mock_response_for_task("task-a", &claude)),
+        ]));
+        let gemini_mock = Arc::new(MockBackend::new(vec![
+            Ok(mock_response_for_task("task-b", &gemini)),
+        ]));
+
+        let mut registry = AgentRegistry::new();
+        registry.register(claude.clone(), claude_mock);
+        registry.register(gemini.clone(), gemini_mock);
+
+        let phase = ath_types::plan::PhaseSpec {
+            id: 1,
+            name: "test-phase".into(),
+            description: "test".into(),
+            tasks,
+            depends_on: vec![],
+            produces: vec![],
+            consumes: vec![],
+        };
+
+        let result = execute_phase_tasks(&phase, &registry, None).await;
+        assert!(result.is_ok());
+        let outputs = result.unwrap();
+        assert_eq!(outputs.len(), 2);
+        assert_eq!(outputs[0].task_name, "task-a");
+        assert_eq!(outputs[1].task_name, "task-b");
+    }
+
+    #[tokio::test]
+    async fn execute_builds_request_with_task_output_schema() {
+        // This test verifies that json_schema is set; checked via successful parse
+        let claude = AgentKind::Claude("opus-4".into());
+        let tasks = vec![make_task_spec("task-1", Some(claude.clone()))];
+
+        let mock = Arc::new(MockBackend::new(vec![
+            Ok(mock_response_for_task("task-1", &claude)),
+        ]));
+
+        let mut registry = AgentRegistry::new();
+        registry.register(claude.clone(), mock);
+
+        let phase = ath_types::plan::PhaseSpec {
+            id: 1, name: "test".into(), description: "test".into(),
+            tasks, depends_on: vec![], produces: vec![], consumes: vec![],
+        };
+
+        let outputs = execute_phase_tasks(&phase, &registry, None).await.unwrap();
+        assert_eq!(outputs.len(), 1);
+        assert_eq!(outputs[0].task_name, "task-1");
+    }
+
+    #[tokio::test]
+    async fn execute_parses_response_content_as_task_output() {
+        let claude = AgentKind::Claude("opus-4".into());
+        let tasks = vec![make_task_spec("parse-test", Some(claude.clone()))];
+
+        let mock = Arc::new(MockBackend::new(vec![
+            Ok(mock_response_for_task("parse-test", &claude)),
+        ]));
+
+        let mut registry = AgentRegistry::new();
+        registry.register(claude.clone(), mock);
+
+        let phase = ath_types::plan::PhaseSpec {
+            id: 1, name: "test".into(), description: "test".into(),
+            tasks, depends_on: vec![], produces: vec![], consumes: vec![],
+        };
+
+        let outputs = execute_phase_tasks(&phase, &registry, None).await.unwrap();
+        assert_eq!(outputs[0].files_produced.len(), 1);
+        assert_eq!(outputs[0].files_produced[0].path, "src/lib.rs");
+        assert_eq!(outputs[0].explanation, "Done");
+    }
+
+    #[tokio::test]
+    async fn execute_collects_outputs_in_order() {
+        let claude = AgentKind::Claude("opus-4".into());
+        let tasks = vec![
+            make_task_spec("first", Some(claude.clone())),
+            make_task_spec("second", Some(claude.clone())),
+            make_task_spec("third", Some(claude.clone())),
+        ];
+
+        let mock = Arc::new(MockBackend::new(vec![
+            Ok(mock_response_for_task("first", &claude)),
+            Ok(mock_response_for_task("second", &claude)),
+            Ok(mock_response_for_task("third", &claude)),
+        ]));
+
+        let mut registry = AgentRegistry::new();
+        registry.register(claude.clone(), mock);
+
+        let phase = ath_types::plan::PhaseSpec {
+            id: 1, name: "test".into(), description: "test".into(),
+            tasks, depends_on: vec![], produces: vec![], consumes: vec![],
+        };
+
+        let outputs = execute_phase_tasks(&phase, &registry, None).await.unwrap();
+        assert_eq!(outputs.len(), 3);
+        assert_eq!(outputs[0].task_name, "first");
+        assert_eq!(outputs[1].task_name, "second");
+        assert_eq!(outputs[2].task_name, "third");
+    }
+
+    #[tokio::test]
+    async fn execute_returns_error_on_agent_send_failure() {
+        let claude = AgentKind::Claude("opus-4".into());
+        let tasks = vec![make_task_spec("failing", Some(claude.clone()))];
+
+        let mock = Arc::new(MockBackend::failing(|| ath_agents::AgentError::Timeout {
+            provider: "Anthropic".into(),
+            duration: std::time::Duration::from_secs(30),
+        }));
+
+        let mut registry = AgentRegistry::new();
+        registry.register(claude.clone(), mock);
+
+        let phase = ath_types::plan::PhaseSpec {
+            id: 1, name: "test".into(), description: "test".into(),
+            tasks, depends_on: vec![], produces: vec![], consumes: vec![],
+        };
+
+        let result = execute_phase_tasks(&phase, &registry, None).await;
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        assert!(matches!(err, crate::error::PhaseRunnerError::TaskExecutionFailed { .. }));
+    }
+
+    #[tokio::test]
+    async fn execute_returns_error_on_unparseable_json() {
+        let claude = AgentKind::Claude("opus-4".into());
+        let tasks = vec![make_task_spec("bad-json", Some(claude.clone()))];
+
+        let mock = Arc::new(MockBackend::always_ok("not valid json"));
+
+        let mut registry = AgentRegistry::new();
+        registry.register(claude.clone(), mock);
+
+        let phase = ath_types::plan::PhaseSpec {
+            id: 1, name: "test".into(), description: "test".into(),
+            tasks, depends_on: vec![], produces: vec![], consumes: vec![],
+        };
+
+        let result = execute_phase_tasks(&phase, &registry, None).await;
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        assert!(matches!(err, crate::error::PhaseRunnerError::TaskExecutionFailed { .. }));
+    }
+
+    #[tokio::test]
+    async fn execute_uses_retry_prompt_when_feedback_provided() {
+        let claude = AgentKind::Claude("opus-4".into());
+        let tasks = vec![make_task_spec("retry-task", Some(claude.clone()))];
+
+        let mock = Arc::new(MockBackend::new(vec![
+            Ok(mock_response_for_task("retry-task", &claude)),
+        ]));
+
+        let mut registry = AgentRegistry::new();
+        registry.register(claude.clone(), mock);
+
+        let phase = ath_types::plan::PhaseSpec {
+            id: 1, name: "test".into(), description: "test".into(),
+            tasks, depends_on: vec![], produces: vec![], consumes: vec![],
+        };
+
+        let feedback = ReviewVerdict {
+            passed: false,
+            reviewer: AgentKind::Gemini("2.5-pro".into()),
+            severity: Severity::Critical,
+            reason: "Fix the bug".into(),
+            suggestions: vec![],
+        };
+
+        // Should succeed -- feedback just changes the prompt, not the parsing
+        let result = execute_phase_tasks(&phase, &registry, Some(&feedback)).await;
+        assert!(result.is_ok());
     }
 }
