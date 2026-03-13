@@ -177,7 +177,10 @@ impl PhaseState<AwaitingReview> {
 
     /// Reject the review. Returns Retry if under max attempts, Failed otherwise.
     pub fn reject(self, verdict: ReviewVerdict) -> RejectOutcome {
-        let data = self.state_data.awaiting_review.expect("AwaitingReview must have data");
+        let data = self
+            .state_data
+            .awaiting_review
+            .expect("AwaitingReview must have data");
         let attempt = data.attempt_number;
 
         if attempt < 3 {
@@ -489,13 +492,14 @@ pub async fn execute_phase_tasks_with_progress(
     let total_tasks = phase.tasks.len();
 
     for (task_index, task) in phase.tasks.iter().enumerate() {
-        let agent = task.assigned_agent.as_ref().ok_or_else(|| {
-            PhaseRunnerError::TaskExecutionFailed {
-                task_name: task.name.clone(),
-                agent: "unassigned".into(),
-                reason: "task has no assigned agent".into(),
-            }
-        })?;
+        let agent =
+            task.assigned_agent
+                .as_ref()
+                .ok_or_else(|| PhaseRunnerError::TaskExecutionFailed {
+                    task_name: task.name.clone(),
+                    agent: "unassigned".into(),
+                    reason: "task has no assigned agent".into(),
+                })?;
 
         emit_progress(
             observer.as_ref(),
@@ -509,13 +513,13 @@ pub async fn execute_phase_tasks_with_progress(
             },
         );
 
-        let backend = registry.get(agent).ok_or_else(|| {
-            PhaseRunnerError::TaskExecutionFailed {
+        let backend = registry
+            .get(agent)
+            .ok_or_else(|| PhaseRunnerError::TaskExecutionFailed {
                 task_name: task.name.clone(),
                 agent: format!("{:?}", agent),
                 reason: "no backend registered for agent".into(),
-            }
-        })?;
+            })?;
 
         // Build prompt: retry with feedback or fresh from task description
         let prompt = if let Some(fb) = feedback {
@@ -533,13 +537,15 @@ pub async fn execute_phase_tasks_with_progress(
             created_at: chrono::Utc::now(),
         };
 
-        let response: AgentResponse = backend.send(request).await.map_err(|e| {
-            PhaseRunnerError::TaskExecutionFailed {
-                task_name: task.name.clone(),
-                agent: format!("{:?}", agent),
-                reason: e.to_string(),
-            }
-        })?;
+        let response: AgentResponse =
+            backend
+                .send(request)
+                .await
+                .map_err(|e| PhaseRunnerError::TaskExecutionFailed {
+                    task_name: task.name.clone(),
+                    agent: format!("{:?}", agent),
+                    reason: e.to_string(),
+                })?;
 
         let mut task_output: TaskOutput = serde_json::from_str(&response.content).map_err(|e| {
             let snippet = if response.content.len() > 100 {
@@ -637,18 +643,20 @@ pub async fn run_phase_with_progress(
         .collect();
 
     // Select reviewer once, cache for all attempts
-    let reviewer = review::select_reviewer(&task_agents, &phase.name, &available)
-        .map_err(|e| PhaseRunnerError::NoReviewerAvailable {
-            phase_name: phase.name.clone(),
-            reason: e.to_string(),
-        })?;
-
-    let reviewer_backend = registry.get(&reviewer).ok_or_else(|| {
+    let reviewer = review::select_reviewer(&task_agents, &phase.name, &available).map_err(|e| {
         PhaseRunnerError::NoReviewerAvailable {
             phase_name: phase.name.clone(),
-            reason: format!("no backend registered for reviewer {:?}", reviewer),
+            reason: e.to_string(),
         }
     })?;
+
+    let reviewer_backend =
+        registry
+            .get(&reviewer)
+            .ok_or_else(|| PhaseRunnerError::NoReviewerAvailable {
+                phase_name: phase.name.clone(),
+                reason: format!("no backend registered for reviewer {:?}", reviewer),
+            })?;
 
     // Start the typestate machine
     let mut review_attempts: Vec<ReviewAttempt> = Vec::new();
@@ -691,33 +699,13 @@ pub async fn run_phase_with_progress(
 
         // Track contributions from this attempt
         for output in &outputs {
-            // Check if we already have a contribution for this agent
-            let existing = all_contributions
-                .iter_mut()
-                .find(|c| mem::discriminant(&c.agent) == mem::discriminant(&output.agent));
-            if let Some(contrib) = existing {
-                contrib.tokens.input_tokens += output.input_tokens;
-                contrib.tokens.output_tokens += output.output_tokens;
-                for f in &output.files_produced {
-                    if !contrib.files_produced.contains(&f.path) {
-                        contrib.files_produced.push(f.path.clone());
-                    }
-                }
-            } else {
-                all_contributions.push(AgentContribution {
-                    agent: output.agent.clone(),
-                    tokens: TokenUsage {
-                        input_tokens: output.input_tokens,
-                        output_tokens: output.output_tokens,
-                        estimated_cost_usd: 0.0,
-                    },
-                    files_produced: output
-                        .files_produced
-                        .iter()
-                        .map(|f| f.path.clone())
-                        .collect(),
-                });
-            }
+            merge_contribution(
+                &mut all_contributions,
+                &output.agent,
+                output.input_tokens,
+                output.output_tokens,
+                output.files_produced.iter().map(|file| file.path.clone()),
+            );
         }
 
         // Create AwaitingReview state (logical, but we use the typestate for correctness)
@@ -725,7 +713,8 @@ pub async fn run_phase_with_progress(
         let awaiting_state = running_state.submit_for_review(outputs.clone(), attempt);
 
         // Build and send review request
-        let review_prompt = review::build_review_prompt(&phase.name, &phase.tasks, awaiting_state.outputs());
+        let review_prompt =
+            review::build_review_prompt(&phase.name, &phase.tasks, awaiting_state.outputs());
         let review_request = AgentRequest {
             id: uuid::Uuid::new_v4(),
             agent: reviewer.clone(),
@@ -777,9 +766,22 @@ pub async fn run_phase_with_progress(
             );
         }
 
+        merge_contribution(
+            &mut all_contributions,
+            &reviewer,
+            review_response.input_tokens,
+            review_response.output_tokens,
+            std::iter::empty(),
+        );
+
         review_attempts.push(ReviewAttempt {
             attempt_number: attempt,
             verdict: verdict.clone(),
+            tokens: TokenUsage {
+                input_tokens: review_response.input_tokens,
+                output_tokens: review_response.output_tokens,
+                estimated_cost_usd: 0.0,
+            },
             timestamp: chrono::Utc::now(),
         });
 
@@ -884,6 +886,44 @@ pub async fn run_phase_with_progress(
     })
 }
 
+fn merge_contribution(
+    contributions: &mut Vec<ath_types::phase::AgentContribution>,
+    agent: &AgentKind,
+    input_tokens: u64,
+    output_tokens: u64,
+    file_paths: impl IntoIterator<Item = String>,
+) {
+    let mut unique_file_paths = Vec::new();
+    for path in file_paths {
+        if !unique_file_paths.contains(&path) {
+            unique_file_paths.push(path);
+        }
+    }
+
+    if let Some(existing) = contributions
+        .iter_mut()
+        .find(|contribution| contribution.agent == *agent)
+    {
+        existing.tokens.input_tokens += input_tokens;
+        existing.tokens.output_tokens += output_tokens;
+        for path in unique_file_paths {
+            if !existing.files_produced.contains(&path) {
+                existing.files_produced.push(path);
+            }
+        }
+    } else {
+        contributions.push(ath_types::phase::AgentContribution {
+            agent: agent.clone(),
+            tokens: ath_types::phase::TokenUsage {
+                input_tokens,
+                output_tokens,
+                estimated_cost_usd: 0.0,
+            },
+            files_produced: unique_file_paths,
+        });
+    }
+}
+
 // ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
@@ -891,18 +931,22 @@ pub async fn run_phase_with_progress(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use ath_agents::MockBackend;
     use ath_types::agent::{AgentKind, AgentResponse};
     use ath_types::plan::TaskSpec;
     use ath_types::project::SkillTag;
     use ath_types::review::{ReviewVerdict, Severity};
-    use ath_agents::MockBackend;
     use std::sync::Arc;
 
     fn make_verdict(passed: bool, reason: &str) -> ReviewVerdict {
         ReviewVerdict {
             passed,
             reviewer: AgentKind::Gemini("2.5-pro".into()),
-            severity: if passed { Severity::Info } else { Severity::Critical },
+            severity: if passed {
+                Severity::Info
+            } else {
+                Severity::Critical
+            },
             reason: reason.into(),
             suggestions: vec![],
         }
@@ -1013,9 +1057,7 @@ mod tests {
                 attempts: 3,
                 final_reason: "tests failing".into(),
             },
-            PhaseStatus::Retrying {
-                attempt_number: 2,
-            },
+            PhaseStatus::Retrying { attempt_number: 2 },
         ];
 
         for status in &statuses {
@@ -1133,12 +1175,12 @@ mod tests {
             make_task_spec("task-b", Some(gemini.clone())),
         ];
 
-        let claude_mock = Arc::new(MockBackend::new(vec![
-            Ok(mock_response_for_task("task-a", &claude)),
-        ]));
-        let gemini_mock = Arc::new(MockBackend::new(vec![
-            Ok(mock_response_for_task("task-b", &gemini)),
-        ]));
+        let claude_mock = Arc::new(MockBackend::new(vec![Ok(mock_response_for_task(
+            "task-a", &claude,
+        ))]));
+        let gemini_mock = Arc::new(MockBackend::new(vec![Ok(mock_response_for_task(
+            "task-b", &gemini,
+        ))]));
 
         let mut registry = AgentRegistry::new();
         registry.register(claude.clone(), claude_mock);
@@ -1168,16 +1210,21 @@ mod tests {
         let claude = AgentKind::Claude("opus-4".into());
         let tasks = vec![make_task_spec("task-1", Some(claude.clone()))];
 
-        let mock = Arc::new(MockBackend::new(vec![
-            Ok(mock_response_for_task("task-1", &claude)),
-        ]));
+        let mock = Arc::new(MockBackend::new(vec![Ok(mock_response_for_task(
+            "task-1", &claude,
+        ))]));
 
         let mut registry = AgentRegistry::new();
         registry.register(claude.clone(), mock);
 
         let phase = ath_types::plan::PhaseSpec {
-            id: 1, name: "test".into(), description: "test".into(),
-            tasks, depends_on: vec![], produces: vec![], consumes: vec![],
+            id: 1,
+            name: "test".into(),
+            description: "test".into(),
+            tasks,
+            depends_on: vec![],
+            produces: vec![],
+            consumes: vec![],
         };
 
         let outputs = execute_phase_tasks(&phase, &registry, None).await.unwrap();
@@ -1190,16 +1237,22 @@ mod tests {
         let claude = AgentKind::Claude("opus-4".into());
         let tasks = vec![make_task_spec("parse-test", Some(claude.clone()))];
 
-        let mock = Arc::new(MockBackend::new(vec![
-            Ok(mock_response_for_task("parse-test", &claude)),
-        ]));
+        let mock = Arc::new(MockBackend::new(vec![Ok(mock_response_for_task(
+            "parse-test",
+            &claude,
+        ))]));
 
         let mut registry = AgentRegistry::new();
         registry.register(claude.clone(), mock);
 
         let phase = ath_types::plan::PhaseSpec {
-            id: 1, name: "test".into(), description: "test".into(),
-            tasks, depends_on: vec![], produces: vec![], consumes: vec![],
+            id: 1,
+            name: "test".into(),
+            description: "test".into(),
+            tasks,
+            depends_on: vec![],
+            produces: vec![],
+            consumes: vec![],
         };
 
         let outputs = execute_phase_tasks(&phase, &registry, None).await.unwrap();
@@ -1227,8 +1280,13 @@ mod tests {
         registry.register(claude.clone(), mock);
 
         let phase = ath_types::plan::PhaseSpec {
-            id: 1, name: "test".into(), description: "test".into(),
-            tasks, depends_on: vec![], produces: vec![], consumes: vec![],
+            id: 1,
+            name: "test".into(),
+            description: "test".into(),
+            tasks,
+            depends_on: vec![],
+            produces: vec![],
+            consumes: vec![],
         };
 
         let outputs = execute_phase_tasks(&phase, &registry, None).await.unwrap();
@@ -1252,14 +1310,22 @@ mod tests {
         registry.register(claude.clone(), mock);
 
         let phase = ath_types::plan::PhaseSpec {
-            id: 1, name: "test".into(), description: "test".into(),
-            tasks, depends_on: vec![], produces: vec![], consumes: vec![],
+            id: 1,
+            name: "test".into(),
+            description: "test".into(),
+            tasks,
+            depends_on: vec![],
+            produces: vec![],
+            consumes: vec![],
         };
 
         let result = execute_phase_tasks(&phase, &registry, None).await;
         assert!(result.is_err());
         let err = result.unwrap_err();
-        assert!(matches!(err, crate::error::PhaseRunnerError::TaskExecutionFailed { .. }));
+        assert!(matches!(
+            err,
+            crate::error::PhaseRunnerError::TaskExecutionFailed { .. }
+        ));
     }
 
     #[tokio::test]
@@ -1273,14 +1339,22 @@ mod tests {
         registry.register(claude.clone(), mock);
 
         let phase = ath_types::plan::PhaseSpec {
-            id: 1, name: "test".into(), description: "test".into(),
-            tasks, depends_on: vec![], produces: vec![], consumes: vec![],
+            id: 1,
+            name: "test".into(),
+            description: "test".into(),
+            tasks,
+            depends_on: vec![],
+            produces: vec![],
+            consumes: vec![],
         };
 
         let result = execute_phase_tasks(&phase, &registry, None).await;
         assert!(result.is_err());
         let err = result.unwrap_err();
-        assert!(matches!(err, crate::error::PhaseRunnerError::TaskExecutionFailed { .. }));
+        assert!(matches!(
+            err,
+            crate::error::PhaseRunnerError::TaskExecutionFailed { .. }
+        ));
     }
 
     #[tokio::test]
@@ -1288,16 +1362,22 @@ mod tests {
         let claude = AgentKind::Claude("opus-4".into());
         let tasks = vec![make_task_spec("retry-task", Some(claude.clone()))];
 
-        let mock = Arc::new(MockBackend::new(vec![
-            Ok(mock_response_for_task("retry-task", &claude)),
-        ]));
+        let mock = Arc::new(MockBackend::new(vec![Ok(mock_response_for_task(
+            "retry-task",
+            &claude,
+        ))]));
 
         let mut registry = AgentRegistry::new();
         registry.register(claude.clone(), mock);
 
         let phase = ath_types::plan::PhaseSpec {
-            id: 1, name: "test".into(), description: "test".into(),
-            tasks, depends_on: vec![], produces: vec![], consumes: vec![],
+            id: 1,
+            name: "test".into(),
+            description: "test".into(),
+            tasks,
+            depends_on: vec![],
+            produces: vec![],
+            consumes: vec![],
         };
 
         let feedback = ReviewVerdict {
@@ -1347,9 +1427,9 @@ mod tests {
         let phase = make_test_phase(tasks);
 
         // Task agent: returns valid TaskOutput
-        let task_mock = Arc::new(MockBackend::new(vec![
-            Ok(mock_response_for_task("task-1", &claude)),
-        ]));
+        let task_mock = Arc::new(MockBackend::new(vec![Ok(mock_response_for_task(
+            "task-1", &claude,
+        ))]));
         // Reviewer agent: returns passing verdict
         let reviewer_mock = Arc::new(MockBackend::always_ok(&make_passing_verdict_json()));
 
@@ -1357,7 +1437,8 @@ mod tests {
         registry.register(claude.clone(), task_mock);
         registry.register(gemini.clone(), reviewer_mock);
 
-        let files_written: Arc<std::sync::Mutex<Vec<FileOutput>>> = Arc::new(std::sync::Mutex::new(vec![]));
+        let files_written: Arc<std::sync::Mutex<Vec<FileOutput>>> =
+            Arc::new(std::sync::Mutex::new(vec![]));
         let files_clone = files_written.clone();
         let write_files = move |files: &[FileOutput]| -> Result<(), PhaseRunnerError> {
             files_clone.lock().unwrap().extend(files.iter().cloned());
@@ -1442,21 +1523,24 @@ mod tests {
                 request_id: uuid::Uuid::new_v4(),
                 agent: gemini.clone(),
                 content: make_failing_verdict_json("fail-1"),
-                input_tokens: 50, output_tokens: 30,
+                input_tokens: 50,
+                output_tokens: 30,
                 created_at: chrono::Utc::now(),
             }),
             Ok(AgentResponse {
                 request_id: uuid::Uuid::new_v4(),
                 agent: gemini.clone(),
                 content: make_failing_verdict_json("fail-2"),
-                input_tokens: 50, output_tokens: 30,
+                input_tokens: 50,
+                output_tokens: 30,
                 created_at: chrono::Utc::now(),
             }),
             Ok(AgentResponse {
                 request_id: uuid::Uuid::new_v4(),
                 agent: gemini.clone(),
                 content: make_failing_verdict_json("fail-3"),
-                input_tokens: 50, output_tokens: 30,
+                input_tokens: 50,
+                output_tokens: 30,
                 created_at: chrono::Utc::now(),
             }),
         ]));
@@ -1491,14 +1575,16 @@ mod tests {
                 request_id: uuid::Uuid::new_v4(),
                 agent: gemini.clone(),
                 content: make_failing_verdict_json("nope"),
-                input_tokens: 50, output_tokens: 30,
+                input_tokens: 50,
+                output_tokens: 30,
                 created_at: chrono::Utc::now(),
             }),
             Ok(AgentResponse {
                 request_id: uuid::Uuid::new_v4(),
                 agent: gemini.clone(),
                 content: make_passing_verdict_json(),
-                input_tokens: 50, output_tokens: 30,
+                input_tokens: 50,
+                output_tokens: 30,
                 created_at: chrono::Utc::now(),
             }),
         ]));
@@ -1509,7 +1595,9 @@ mod tests {
 
         let write_files = |_: &[FileOutput]| -> Result<(), PhaseRunnerError> { Ok(()) };
 
-        let record = run_phase(&phase, &registry, |_| true, write_files, None).await.unwrap();
+        let record = run_phase(&phase, &registry, |_| true, write_files, None)
+            .await
+            .unwrap();
         // All review attempts should use the same reviewer kind
         for attempt in &record.review_attempts {
             assert!(matches!(attempt.verdict.reviewer, AgentKind::Gemini(_)));
@@ -1536,14 +1624,16 @@ mod tests {
                 request_id: uuid::Uuid::new_v4(),
                 agent: gemini.clone(),
                 content: make_failing_verdict_json("use better error handling"),
-                input_tokens: 50, output_tokens: 30,
+                input_tokens: 50,
+                output_tokens: 30,
                 created_at: chrono::Utc::now(),
             }),
             Ok(AgentResponse {
                 request_id: uuid::Uuid::new_v4(),
                 agent: gemini.clone(),
                 content: make_passing_verdict_json(),
-                input_tokens: 50, output_tokens: 30,
+                input_tokens: 50,
+                output_tokens: 30,
                 created_at: chrono::Utc::now(),
             }),
         ]));
@@ -1554,7 +1644,9 @@ mod tests {
 
         let write_files = |_: &[FileOutput]| -> Result<(), PhaseRunnerError> { Ok(()) };
 
-        let record = run_phase(&phase, &registry, |_| true, write_files, None).await.unwrap();
+        let record = run_phase(&phase, &registry, |_| true, write_files, None)
+            .await
+            .unwrap();
         assert_eq!(record.review_attempts.len(), 2);
     }
 
@@ -1576,14 +1668,16 @@ mod tests {
                 request_id: uuid::Uuid::new_v4(),
                 agent: gemini.clone(),
                 content: make_failing_verdict_json("nope"),
-                input_tokens: 50, output_tokens: 30,
+                input_tokens: 50,
+                output_tokens: 30,
                 created_at: chrono::Utc::now(),
             }),
             Ok(AgentResponse {
                 request_id: uuid::Uuid::new_v4(),
                 agent: gemini.clone(),
                 content: make_passing_verdict_json(),
-                input_tokens: 50, output_tokens: 30,
+                input_tokens: 50,
+                output_tokens: 30,
                 created_at: chrono::Utc::now(),
             }),
         ]));
@@ -1599,9 +1693,14 @@ mod tests {
             Ok(())
         };
 
-        let _ = run_phase(&phase, &registry, |_| true, write_files, None).await.unwrap();
+        let _ = run_phase(&phase, &registry, |_| true, write_files, None)
+            .await
+            .unwrap();
         // write_files should be called exactly once (only after passing review)
-        assert_eq!(write_call_count.load(std::sync::atomic::Ordering::SeqCst), 1);
+        assert_eq!(
+            write_call_count.load(std::sync::atomic::Ordering::SeqCst),
+            1
+        );
     }
 
     #[tokio::test]
@@ -1612,12 +1711,12 @@ mod tests {
         let tasks = vec![make_task_spec("task-1", Some(claude.clone()))];
         let phase = make_test_phase(tasks);
 
-        let task_mock = Arc::new(MockBackend::new(vec![
-            Ok(mock_response_for_task("task-1", &claude)),
-        ]));
-        let reviewer_mock = Arc::new(MockBackend::new(vec![
-            Ok(make_review_response(&gemini, true, "All good", 50, 30)),
-        ]));
+        let task_mock = Arc::new(MockBackend::new(vec![Ok(mock_response_for_task(
+            "task-1", &claude,
+        ))]));
+        let reviewer_mock = Arc::new(MockBackend::new(vec![Ok(make_review_response(
+            &gemini, true, "All good", 50, 30,
+        ))]));
 
         let mut registry = AgentRegistry::new();
         registry.register(claude.clone(), task_mock);
@@ -1625,14 +1724,24 @@ mod tests {
 
         let write_files = |_: &[FileOutput]| -> Result<(), PhaseRunnerError> { Ok(()) };
 
-        let record = run_phase(&phase, &registry, |_| true, write_files, None).await.unwrap();
+        let record = run_phase(&phase, &registry, |_| true, write_files, None)
+            .await
+            .unwrap();
         assert_eq!(record.review_attempts.len(), 1);
         assert_eq!(record.review_attempts[0].tokens.input_tokens, 50);
         assert_eq!(record.review_attempts[0].tokens.output_tokens, 30);
 
         assert_eq!(record.contributions.len(), 2);
-        let total_input: u64 = record.contributions.iter().map(|c| c.tokens.input_tokens).sum();
-        let total_output: u64 = record.contributions.iter().map(|c| c.tokens.output_tokens).sum();
+        let total_input: u64 = record
+            .contributions
+            .iter()
+            .map(|c| c.tokens.input_tokens)
+            .sum();
+        let total_output: u64 = record
+            .contributions
+            .iter()
+            .map(|c| c.tokens.output_tokens)
+            .sum();
         assert_eq!(total_input, 150);
         assert_eq!(total_output, 80);
     }
@@ -1660,7 +1769,9 @@ mod tests {
 
         let write_files = |_: &[FileOutput]| -> Result<(), PhaseRunnerError> { Ok(()) };
 
-        let record = run_phase(&phase, &registry, |_| true, write_files, None).await.unwrap();
+        let record = run_phase(&phase, &registry, |_| true, write_files, None)
+            .await
+            .unwrap();
         assert_eq!(record.review_attempts.len(), 2);
         assert_eq!(
             record
@@ -1704,9 +1815,9 @@ mod tests {
             Ok(mock_response_for_task("task-opus", &claude_opus)),
             Ok(mock_response_for_task("task-sonnet", &claude_sonnet)),
         ]));
-        let reviewer_mock = Arc::new(MockBackend::new(vec![
-            Ok(make_review_response(&gemini, true, "All good", 50, 30)),
-        ]));
+        let reviewer_mock = Arc::new(MockBackend::new(vec![Ok(make_review_response(
+            &gemini, true, "All good", 50, 30,
+        ))]));
 
         let mut registry = AgentRegistry::new();
         registry.register(claude_opus.clone(), claude_mock);
@@ -1714,19 +1825,17 @@ mod tests {
 
         let write_files = |_: &[FileOutput]| -> Result<(), PhaseRunnerError> { Ok(()) };
 
-        let record = run_phase(&phase, &registry, |_| true, write_files, None).await.unwrap();
-        assert!(
-            record
-                .contributions
-                .iter()
-                .any(|contribution| contribution.agent == claude_opus)
-        );
-        assert!(
-            record
-                .contributions
-                .iter()
-                .any(|contribution| contribution.agent == claude_sonnet)
-        );
+        let record = run_phase(&phase, &registry, |_| true, write_files, None)
+            .await
+            .unwrap();
+        assert!(record
+            .contributions
+            .iter()
+            .any(|contribution| contribution.agent == claude_opus));
+        assert!(record
+            .contributions
+            .iter()
+            .any(|contribution| contribution.agent == claude_sonnet));
     }
 
     #[tokio::test]
@@ -1752,7 +1861,9 @@ mod tests {
 
         let write_files = |_: &[FileOutput]| -> Result<(), PhaseRunnerError> { Ok(()) };
 
-        let record = run_phase(&phase, &registry, |_| true, write_files, None).await.unwrap();
+        let record = run_phase(&phase, &registry, |_| true, write_files, None)
+            .await
+            .unwrap();
         let author_contribution = record
             .contributions
             .iter()
@@ -1760,6 +1871,9 @@ mod tests {
             .expect("author contribution");
         assert_eq!(author_contribution.tokens.input_tokens, 200);
         assert_eq!(author_contribution.tokens.output_tokens, 100);
-        assert_eq!(author_contribution.files_produced, vec!["src/lib.rs".to_string()]);
+        assert_eq!(
+            author_contribution.files_produced,
+            vec!["src/lib.rs".to_string()]
+        );
     }
 }

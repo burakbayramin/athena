@@ -61,7 +61,8 @@ pub(crate) fn write_run_report(project_dir: &Path, report: &RunReport) -> Result
 
     let json = serde_json::to_string_pretty(report).map_err(|e| anyhow!("{e}"))?;
     std::fs::write(&path, json).map_err(|e| anyhow!("{e}"))?;
-    std::fs::write(latest_run_pointer_path(project_dir), &report.run_id).map_err(|e| anyhow!("{e}"))?;
+    std::fs::write(latest_run_pointer_path(project_dir), &report.run_id)
+        .map_err(|e| anyhow!("{e}"))?;
     Ok(path)
 }
 
@@ -98,9 +99,7 @@ pub(crate) fn render_report(report: &RunReport) -> String {
     out.push('\n');
     out.push_str(&format!(
         "Totals: {} input, {} output, ${:.2} estimated\n",
-        report.totals.input_tokens,
-        report.totals.output_tokens,
-        report.totals.estimated_cost_usd
+        report.totals.input_tokens, report.totals.output_tokens, report.totals.estimated_cost_usd
     ));
 
     out
@@ -129,11 +128,12 @@ fn next_run_id() -> String {
 fn resolve_report_path(project_dir: &Path, target: &ReportTarget) -> Result<PathBuf> {
     match target {
         ReportTarget::LatestRun => {
-            let latest = std::fs::read_to_string(latest_run_pointer_path(project_dir)).map_err(|_| {
-                anyhow!(
+            let latest =
+                std::fs::read_to_string(latest_run_pointer_path(project_dir)).map_err(|_| {
+                    anyhow!(
                     "`ath report` requires a previously saved run report. Run `ath run` once first."
                 )
-            })?;
+                })?;
             let run_id = latest.trim();
             if run_id.is_empty() {
                 anyhow::bail!(
@@ -253,6 +253,7 @@ mod tests {
                         reason: "Looks good".into(),
                         suggestions: vec![],
                     },
+                    tokens: ath_types::phase::TokenUsage::default(),
                     timestamp: chrono::Utc::now(),
                 }],
             }],

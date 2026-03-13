@@ -11,7 +11,7 @@ use crate::agent::AgentKind;
 use crate::review::ReviewVerdict;
 
 /// Token usage statistics for an agent interaction.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
 pub struct TokenUsage {
     /// Number of input tokens consumed.
     pub input_tokens: u64,
@@ -39,6 +39,9 @@ pub struct ReviewAttempt {
     pub attempt_number: u32,
     /// The verdict from the review.
     pub verdict: ReviewVerdict,
+    /// Token usage consumed by the reviewer on this attempt.
+    #[serde(default)]
+    pub tokens: TokenUsage,
     /// When this review attempt occurred.
     pub timestamp: DateTime<Utc>,
 }
@@ -139,6 +142,24 @@ mod tests {
         let json = serde_json::to_string(&record).expect("serialize");
         let deserialized: PhaseRecord = serde_json::from_str(&json).expect("deserialize");
         assert_eq!(record, deserialized);
+    }
+
+    #[test]
+    fn review_attempt_tokens_default_when_missing() {
+        let json = serde_json::json!({
+            "attempt_number": 1,
+            "verdict": {
+                "passed": true,
+                "reviewer": { "Gemini": "2.5-pro" },
+                "severity": "info",
+                "reason": "Looks good",
+                "suggestions": []
+            },
+            "timestamp": Utc::now(),
+        });
+
+        let attempt: ReviewAttempt = serde_json::from_value(json).expect("deserialize");
+        assert_eq!(attempt.tokens, TokenUsage::default());
     }
 
     #[test]
