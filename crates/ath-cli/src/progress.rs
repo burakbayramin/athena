@@ -96,6 +96,21 @@ impl TerminalProgressReporter {
         }
     }
 
+    pub(crate) fn print_durable_block(&self, block: &str) {
+        match &self.progress_bar {
+            Some(progress_bar) => {
+                if self.emit_stdout {
+                    progress_bar.println(block.to_string());
+                }
+            }
+            None => {
+                if self.emit_stdout {
+                    println!("{block}");
+                }
+            }
+        }
+    }
+
     #[cfg(test)]
     pub(crate) fn snapshot(&self) -> String {
         self.state.lock().unwrap().snapshot.clone()
@@ -222,6 +237,7 @@ fn apply_event(state: &mut ReporterState, event: &ProgressEvent) {
             state.active_task = None;
             state.active_agent = None;
         }
+        ProgressEvent::Transcript(_) => {}
     }
 
     state.snapshot = render_snapshot(state);
@@ -317,6 +333,7 @@ fn milestone_line(event: &ProgressEvent) -> Option<String> {
         ProgressEvent::PhaseCompleted { phase_name, .. } => {
             Some(format!("Phase complete: {phase_name}"))
         }
+        ProgressEvent::Transcript(_) => None,
         _ => None,
     }
 }
@@ -414,6 +431,7 @@ fn plain_line(event: &ProgressEvent) -> Option<String> {
             "Phase {}/{} complete: {}",
             phase_index, total_phases, phase_name
         )),
+        ProgressEvent::Transcript(_) => None,
     }
 }
 

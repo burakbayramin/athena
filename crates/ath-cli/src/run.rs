@@ -9,6 +9,7 @@ use ath_planner::input::{display_project_spec_summary, parse_input, resolve_inpu
 use ath_orchestrator::coordinator::AgentCoordinator;
 use ath_orchestrator::isolation::check_isolation;
 use ath_orchestrator::phase_runner::AgentRegistry;
+use ath_orchestrator::progress::SharedProgressObserver;
 use ath_orchestrator::router::assign_all_tasks;
 use ath_orchestrator::taxonomy;
 use ath_types::agent::AgentKind;
@@ -16,6 +17,7 @@ use ath_types::plan::{ExecutionPlan, PhaseSpec, TaskSpec};
 use clap::Args;
 
 use crate::progress::TerminalProgressReporter;
+use crate::verbose::{CliObserver, VerboseTranscriptSink};
 use crate::GlobalArgs;
 
 #[derive(Debug, Args, Clone, PartialEq, Eq)]
@@ -75,12 +77,21 @@ pub(crate) async fn run_command(args: RunArgs, global: GlobalArgs) -> Result<()>
     display_execution_plan(&plan, &warnings);
 
     let reporter = Arc::new(TerminalProgressReporter::new(global));
-    let progress = reporter.clone();
+    let verbose_sink = if global.verbose {
+        Some(Arc::new(VerboseTranscriptSink::new(
+            reporter.clone(),
+            configured_secrets(&config),
+        )))
+    } else {
+        None
+    };
+    let observer: SharedProgressObserver =
+        Arc::new(CliObserver::new(reporter.clone(), verbose_sink));
     let output_dir = std::env::current_dir().map_err(|e| anyhow!("{e}"))?;
     let coordinator = AgentCoordinator::new(registry, output_dir, None);
 
     let records = coordinator
-        .run_plan_with_progress(&plan, Some(progress))
+        .run_plan_with_progress(&plan, Some(observer))
         .await
         .map_err(|e| anyhow!("{e}"))?;
 
@@ -153,6 +164,17 @@ fn build_agent_registry(config: &ConfigStore) -> Result<AgentRegistry> {
     }
 
     Ok(registry)
+}
+
+fn configured_secrets(config: &ConfigStore) -> Vec<String> {
+    [
+        config.anthropic_api_key.clone(),
+        config.google_api_key.clone(),
+        config.openai_api_key.clone(),
+    ]
+    .into_iter()
+    .flatten()
+    .collect()
 }
 
 pub(crate) fn assign_agents_and_check_isolation(

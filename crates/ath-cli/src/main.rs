@@ -6,6 +6,7 @@ mod init;
 mod progress;
 mod report;
 mod run;
+mod verbose;
 
 use anyhow::Result;
 use ath_config::ConfigError;
