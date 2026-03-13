@@ -90,12 +90,15 @@ pub(crate) async fn run_command(args: RunArgs, global: GlobalArgs) -> Result<()>
     };
     let observer: SharedProgressObserver =
         Arc::new(CliObserver::new(reporter.clone(), verbose_sink));
-    let coordinator = AgentCoordinator::new(registry, output_dir, None);
+    let coordinator = AgentCoordinator::new(registry, output_dir.clone(), None);
 
     let records = coordinator
         .run_plan_with_progress(&plan, Some(observer))
         .await
         .map_err(|e| anyhow!("{e}"))?;
+
+    let report = crate::report::build_run_report(&plan, &records);
+    crate::report::write_run_report(&output_dir, &report)?;
 
     reporter.finish(&format!(
         "Run complete: {} phase(s) executed and reviewed.",

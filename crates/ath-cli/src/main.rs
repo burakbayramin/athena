@@ -195,25 +195,15 @@ mod cli_surface {
         }
 
         #[test]
-        fn report_placeholder_defaults_to_latest_run() {
+        fn report_target_defaults_to_latest_run() {
             let target = report::resolve_target(None);
-            let message = report::report_placeholder_message(&target);
-
-            assert!(
-                message.contains("latest run"),
-                "default report placeholder should mention latest run"
-            );
+            assert!(matches!(target, report::ReportTarget::LatestRun));
         }
 
         #[test]
-        fn report_placeholder_respects_explicit_target() {
+        fn report_target_respects_explicit_target() {
             let target = report::resolve_target(Some("run-42"));
-            let message = report::report_placeholder_message(&target);
-
-            assert!(
-                message.contains("run-42"),
-                "explicit report placeholder should echo the target"
-            );
+            assert_eq!(target, report::ReportTarget::Explicit("run-42".into()));
         }
     }
 }
