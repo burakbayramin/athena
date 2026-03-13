@@ -10,6 +10,7 @@ pub mod coordinator;
 pub mod error;
 pub mod isolation;
 pub mod phase_runner;
+pub mod progress;
 pub mod review;
 pub mod router;
 pub mod taxonomy;

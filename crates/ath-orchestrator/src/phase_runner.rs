@@ -19,6 +19,7 @@ use ath_types::review::ReviewVerdict;
 use serde::{Deserialize, Serialize};
 
 use crate::error::PhaseRunnerError;
+use crate::progress::{emit_progress, ProgressEvent, SharedProgressObserver};
 use crate::review;
 
 // ---------------------------------------------------------------------------
@@ -469,9 +470,21 @@ pub async fn execute_phase_tasks(
     registry: &AgentRegistry,
     feedback: Option<&ReviewVerdict>,
 ) -> Result<Vec<TaskOutput>, PhaseRunnerError> {
-    let mut outputs = Vec::with_capacity(phase.tasks.len());
+    execute_phase_tasks_with_progress(phase, registry, feedback, None).await
+}
 
-    for task in &phase.tasks {
+/// Dispatches each task in a phase to its assigned agent sequentially and emits
+/// lifecycle events when an observer is attached.
+pub async fn execute_phase_tasks_with_progress(
+    phase: &PhaseSpec,
+    registry: &AgentRegistry,
+    feedback: Option<&ReviewVerdict>,
+    observer: Option<SharedProgressObserver>,
+) -> Result<Vec<TaskOutput>, PhaseRunnerError> {
+    let mut outputs = Vec::with_capacity(phase.tasks.len());
+    let total_tasks = phase.tasks.len();
+
+    for (task_index, task) in phase.tasks.iter().enumerate() {
         let agent = task.assigned_agent.as_ref().ok_or_else(|| {
             PhaseRunnerError::TaskExecutionFailed {
                 task_name: task.name.clone(),
@@ -479,6 +492,18 @@ pub async fn execute_phase_tasks(
                 reason: "task has no assigned agent".into(),
             }
         })?;
+
+        emit_progress(
+            observer.as_ref(),
+            ProgressEvent::TaskStarted {
+                phase_id: phase.id,
+                phase_name: phase.name.clone(),
+                task_name: task.name.clone(),
+                task_index: task_index + 1,
+                total_tasks,
+                agent: agent.clone(),
+            },
+        );
 
         let backend = registry.get(agent).ok_or_else(|| {
             PhaseRunnerError::TaskExecutionFailed {
@@ -531,6 +556,18 @@ pub async fn execute_phase_tasks(
         task_output.input_tokens = response.input_tokens;
         task_output.output_tokens = response.output_tokens;
 
+        emit_progress(
+            observer.as_ref(),
+            ProgressEvent::TaskCompleted {
+                phase_id: phase.id,
+                phase_name: phase.name.clone(),
+                task_name: task.name.clone(),
+                task_index: task_index + 1,
+                total_tasks,
+                agent: agent.clone(),
+            },
+        );
+
         outputs.push(task_output);
     }
 
@@ -553,6 +590,19 @@ pub async fn run_phase(
     available: impl Fn(&AgentKind) -> bool,
     write_files: impl Fn(&[FileOutput]) -> Result<(), PhaseRunnerError>,
     git: Option<&ath_git::async_ops::AsyncGitLayer>,
+) -> Result<ath_types::phase::PhaseRecord, PhaseRunnerError> {
+    run_phase_with_progress(phase, registry, available, write_files, git, None).await
+}
+
+/// Drives a single phase through the full typestate lifecycle with optional
+/// progress events emitted during task, review, and retry transitions.
+pub async fn run_phase_with_progress(
+    phase: &PhaseSpec,
+    registry: &AgentRegistry,
+    available: impl Fn(&AgentKind) -> bool,
+    write_files: impl Fn(&[FileOutput]) -> Result<(), PhaseRunnerError>,
+    git: Option<&ath_git::async_ops::AsyncGitLayer>,
+    observer: Option<SharedProgressObserver>,
 ) -> Result<ath_types::phase::PhaseRecord, PhaseRunnerError> {
     use ath_types::phase::{AgentContribution, PhaseRecord, ReviewAttempt, TokenUsage};
 
@@ -590,12 +640,9 @@ pub async fn run_phase(
 
     for attempt in 1u32..=3 {
         // Execute all tasks
-        let outputs = execute_phase_tasks(
-            phase,
-            registry,
-            last_feedback.as_ref(),
-        )
-        .await?;
+        let outputs =
+            execute_phase_tasks_with_progress(phase, registry, last_feedback.as_ref(), observer.clone())
+                .await?;
 
         // Track contributions from this attempt
         for output in &outputs {
@@ -643,6 +690,16 @@ pub async fn run_phase(
             created_at: chrono::Utc::now(),
         };
 
+        emit_progress(
+            observer.as_ref(),
+            ProgressEvent::ReviewStarted {
+                phase_id: phase.id,
+                phase_name: phase.name.clone(),
+                reviewer: reviewer.clone(),
+                attempt_number: attempt,
+            },
+        );
+
         let review_response = reviewer_backend.send(review_request).await.map_err(|e| {
             PhaseRunnerError::ReviewDispatchFailed {
                 reviewer: format!("{:?}", reviewer),
@@ -663,6 +720,16 @@ pub async fn run_phase(
         });
 
         if verdict.passed {
+            emit_progress(
+                observer.as_ref(),
+                ProgressEvent::ReviewPassed {
+                    phase_id: phase.id,
+                    phase_name: phase.name.clone(),
+                    reviewer: reviewer.clone(),
+                    attempt_number: attempt,
+                },
+            );
+
             // Transition to Complete
             let _complete = awaiting_state.approve();
 
@@ -707,10 +774,30 @@ pub async fn run_phase(
             });
         }
 
+        emit_progress(
+            observer.as_ref(),
+            ProgressEvent::ReviewFailed {
+                phase_id: phase.id,
+                phase_name: phase.name.clone(),
+                reviewer: reviewer.clone(),
+                attempt_number: attempt,
+                reason_summary: verdict.reason.clone(),
+            },
+        );
+
         // Review failed -- check if we can retry
         match awaiting_state.reject(verdict.clone()) {
             RejectOutcome::Retry(retrying) => {
                 last_feedback = Some(verdict);
+                emit_progress(
+                    observer.as_ref(),
+                    ProgressEvent::RetryStarted {
+                        phase_id: phase.id,
+                        phase_name: phase.name.clone(),
+                        reviewer: reviewer.clone(),
+                        attempt_number: retrying.attempt_number(),
+                    },
+                );
                 let _running_again = retrying.retry();
                 // Loop continues
             }

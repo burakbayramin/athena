@@ -12,7 +12,8 @@ use ath_types::plan::ExecutionPlan;
 use ath_types::phase::PhaseRecord;
 
 use crate::error::PhaseRunnerError;
-use crate::phase_runner::{run_phase, AgentRegistry, FileOutput};
+use crate::phase_runner::{run_phase_with_progress, AgentRegistry, FileOutput};
+use crate::progress::{emit_progress, ProgressEvent, SharedProgressObserver};
 
 /// Drives a full `ExecutionPlan` through sequential phase dispatch.
 ///
@@ -47,9 +48,19 @@ impl AgentCoordinator {
         &self,
         plan: &ExecutionPlan,
     ) -> Result<Vec<PhaseRecord>, PhaseRunnerError> {
-        let mut results: Vec<PhaseRecord> = Vec::new();
+        self.run_plan_with_progress(plan, None).await
+    }
 
-        for &phase_id in &plan.execution_order {
+    /// Execute all phases in `plan.execution_order` sequentially with optional progress events.
+    pub async fn run_plan_with_progress(
+        &self,
+        plan: &ExecutionPlan,
+        observer: Option<SharedProgressObserver>,
+    ) -> Result<Vec<PhaseRecord>, PhaseRunnerError> {
+        let mut results: Vec<PhaseRecord> = Vec::new();
+        let total_phases = plan.execution_order.len();
+
+        for (phase_index, &phase_id) in plan.execution_order.iter().enumerate() {
             let phase = plan
                 .phases
                 .iter()
@@ -59,6 +70,17 @@ impl AgentCoordinator {
                     agent: "coordinator".into(),
                     reason: format!("phase id {} not found in plan.phases", phase_id),
                 })?;
+
+            emit_progress(
+                observer.as_ref(),
+                ProgressEvent::PhaseStarted {
+                    phase_id: phase.id,
+                    phase_name: phase.name.clone(),
+                    phase_index: phase_index + 1,
+                    total_phases,
+                    tasks: phase.tasks.iter().map(|task| task.name.clone()).collect(),
+                },
+            );
 
             let output_dir = self.output_dir.clone();
             let write_files = move |files: &[FileOutput]| -> Result<(), PhaseRunnerError> {
@@ -86,14 +108,25 @@ impl AgentCoordinator {
                 self.registry.get(kind).is_some()
             };
 
-            let record = run_phase(
+            let record = run_phase_with_progress(
                 phase,
                 &self.registry,
                 available,
                 write_files,
                 self.git.as_ref(),
+                observer.clone(),
             )
             .await?;
+
+            emit_progress(
+                observer.as_ref(),
+                ProgressEvent::PhaseCompleted {
+                    phase_id: phase.id,
+                    phase_name: phase.name.clone(),
+                    phase_index: phase_index + 1,
+                    total_phases,
+                },
+            );
 
             results.push(record);
         }
