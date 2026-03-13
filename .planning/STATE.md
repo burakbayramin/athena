@@ -4,14 +4,14 @@ milestone: v1.0
 milestone_name: milestone
 status: in_progress
 stopped_at: Completed 08-01-PLAN.md
-last_updated: "2026-03-13T10:04:03Z"
-last_activity: 2026-03-13 — Completed Plan 08-02 (Progress Reporter)
+last_updated: "2026-03-13T10:13:35Z"
+last_activity: 2026-03-13 — Completed Plan 08-03 (Verbose Transcripts)
 progress:
   total_phases: 10
   completed_phases: 7
   total_plans: 28
-  completed_plans: 26
-  percent: 93
+  completed_plans: 27
+  percent: 96
 ---
 
 # Project State
@@ -26,17 +26,17 @@ See: .planning/PROJECT.md (updated 2026-03-12)
 ## Current Position
 
 Phase: 8 of 10 (CLI and Progress)
-Plan: 3 of 4 in current phase
-Status: Ready for 08-03 (Verbose Transcripts)
-Last activity: 2026-03-13 — Completed Plan 08-02 (Progress Reporter)
-Progress: [█████████░] 93%
+Plan: 4 of 4 in current phase
+Status: Ready for 08-04 (Dry-Run and Plan Cache)
+Last activity: 2026-03-13 — Completed Plan 08-03 (Verbose Transcripts)
+Progress: [██████████] 96%
 
 ## Performance Metrics
 
-- Total plans completed: 26
+- Total plans completed: 27
 - Average duration: 4 min
 - Total execution time: 1.5 hours
-- Most recent plan: 08-02 (17 min, 2 tasks, 10 files)
+- Most recent plan: 08-03 (9 min, 2 tasks, 7 files)
 
 ## Recent Decisions
 
@@ -48,6 +48,9 @@ Progress: [█████████░] 93%
 - 08-02: Progress updates flow through an `Arc<dyn ProgressObserver>` seam so the orchestrator remains terminal-agnostic
 - 08-02: `ath run` selects the first configured planning provider instead of assuming Anthropic availability
 - 08-02: Terminal progress falls back to plain text when output is non-interactive or color is disabled
+- 08-03: Verbose transcript capture is opt-in through `captures_transcripts()` so default runs avoid transcript formatting work
+- 08-03: Transcript blocks print through the progress reporter’s durable output channel instead of interleaving with the live board
+- 08-03: Retry feedback is rendered as a first-class transcript unit alongside executor and reviewer exchanges
 
 ## Pending Todos
 
@@ -55,11 +58,11 @@ None.
 
 ## Blockers/Concerns
 
-- Phase 8 plan 03 still needs transcript capture and grouped verbose rendering on top of the new progress seam
+- Phase 8 plan 04 still needs the honest local plan cache and dry-run path
 - Phase 10: git2 worktree lifecycle in async Rust context has limited documented examples
 
 ## Session Continuity
 
-Last session: 2026-03-13T10:04:03Z
-Stopped at: Completed 08-02-PLAN.md
-Resume file: .planning/phases/08-cli-and-progress/08-03-PLAN.md
+Last session: 2026-03-13T10:13:35Z
+Stopped at: Completed 08-03-PLAN.md
+Resume file: .planning/phases/08-cli-and-progress/08-04-PLAN.md
