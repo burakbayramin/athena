@@ -22,7 +22,7 @@
 
 ### Agent Orchestration
 
-- [ ] **ORCH-01**: Athena assigns named agent roles (Claude: architecture/logic, Gemini: research/APIs, Codex: code generation)
+- [x] **ORCH-01**: Athena assigns named agent roles (Claude: architecture/logic, Gemini: research/APIs, Codex: code generation)
 - [ ] **ORCH-02**: Athena routes tasks to agents based on a skill taxonomy matching task requirements to model strengths
 - [ ] **ORCH-03**: Each agent operates on isolated modules with strict file ownership — no shared edits
 - [ ] **ORCH-04**: Independent phases execute in parallel across agents simultaneously
@@ -82,7 +82,7 @@
 | PLAN-03 | Phase 5 | Complete |
 | PLAN-04 | Phase 1 | Complete |
 | PLAN-05 | Phase 8 | Pending |
-| ORCH-01 | Phase 6 | Pending |
+| ORCH-01 | Phase 6 | Complete |
 | ORCH-02 | Phase 6 | Pending |
 | ORCH-03 | Phase 6 | Pending |
 | ORCH-04 | Phase 10 | Pending |
