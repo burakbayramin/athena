@@ -110,11 +110,13 @@ name = "ath-cli"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "ath-agents",
  "ath-config",
  "ath-planner",
  "ath-types",
  "clap",
  "colored",
+ "tokio",
 ]
 
 [[package]]
@@ -144,7 +146,17 @@ dependencies = [
 name = "ath-orchestrator"
 version = "0.1.0"
 dependencies = [
+ "async-trait",
+ "ath-agents",
+ "ath-git",
  "ath-types",
+ "chrono",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "thiserror 2.0.18",
+ "tokio",
+ "uuid",
 ]
 
 [[package]]
@@ -154,6 +166,7 @@ dependencies = [
  "ath-agents",
  "ath-types",
  "chrono",
+ "colored",
  "ignore",
  "serde",
  "serde_json",
