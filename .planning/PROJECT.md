@@ -12,22 +12,24 @@ Intelligent phase analysis — breaking any software project into well-structure
 
 ### Validated
 
-(None yet — ship to validate)
+- ✓ Analyze project input (natural language, spec doc, or existing codebase) into structured phases — v1.0
+- ✓ Perform dependency analysis to determine phase ordering and parallelizable work — v1.0
+- ✓ Map required skills per task and assign to appropriate AI agents — v1.0
+- ✓ Enforce module isolation so agents work on separate files/modules without conflicts — v1.0
+- ✓ Call Claude, Gemini, and Codex APIs autonomously to execute assigned tasks — v1.0
+- ✓ Write generated code to local git repo with commits per phase and agent metadata — v1.0
+- ✓ Cross-review between phases with review gate blocking progression — v1.0
+- ✓ Auto-retry on review failure with reviewer feedback (max 3 attempts) — v1.0
+- ✓ Structured final report with phase table, agent assignments, review outcomes, and cost tracking — v1.0
+- ✓ Accept user-provided API keys via environment variables or config file — v1.0
+- ✓ Real-time terminal progress showing current phase, active agent, task status — v1.0
+- ✓ Dry-run mode to preview plan without execution — v1.0
+- ✓ Parallel execution of independent phases via tokio JoinSet — v1.0
+- ✓ Actionable error messages distinguishing API errors, review failures, and schema violations — v1.0
 
 ### Active
 
-- [ ] Analyze project input (natural language, spec doc, or existing codebase) into structured phases
-- [ ] Perform dependency analysis to determine phase ordering and parallelizable work
-- [ ] Map required skills per task (Python, React, Security, DevOps, etc.)
-- [ ] Assign tasks to appropriate AI agents based on their strengths (Claude: architecture/logic, Gemini: research/docs/APIs, Codex: code generation/boilerplate)
-- [ ] Enforce module isolation so agents work on separate files/modules without conflicts
-- [ ] Call Claude, Gemini, and Codex APIs autonomously to execute assigned tasks
-- [ ] Write generated code directly to a local git repo with commits per phase
-- [ ] Cross-review between phases — each agent's output reviewed by a different agent
-- [ ] Block phase progression if review fails; loop until issues resolved
-- [ ] Produce structured report: project summary, phase table (phase/task/dependency/skill/agent/parallelism), review checklist
-- [ ] Accept user-provided API keys via environment variables or config file
-- [ ] Support any software project type (web apps, CLIs, APIs, mobile — language/framework agnostic)
+(No active requirements — define next milestone with `/gsd:new-milestone`)
 
 ### Out of Scope
 
@@ -36,15 +38,18 @@ Intelligent phase analysis — breaking any software project into well-structure
 - PR-based workflow — direct commits to local repo
 - Mobile app — CLI distribution only
 - Real-time collaboration — single-user tool
+- Resumable execution from last completed phase — v2 scope
+- Plugin system for custom agent definitions — v2 scope
+- Support for local/self-hosted models (Ollama, etc.) — v2 scope
 
 ## Context
 
-- Built in Rust for performance, single-binary distribution, and strong type system
-- Three AI backends: Anthropic (Claude), Google (Gemini), OpenAI (Codex/Copilot)
-- Module isolation strategy: each agent owns specific files/modules with strict boundaries, no shared edits
-- Cross-review model: Agent A's output is reviewed by Agent B (not self-review)
-- The "orchestra conductor" metaphor is central — Athena coordinates, agents perform
-- Phase analysis is the foundation — if decomposition is wrong, everything downstream fails
+Shipped v1.0 MVP with 16,315 lines of Rust across 7 crates.
+Tech stack: Rust, tokio, clap, git2, genai, backon, indicatif, tracing.
+Three AI backends: Anthropic (Claude), Google (Gemini), OpenAI (Codex/Copilot).
+Module isolation with strict file ownership prevents agent conflicts.
+Cross-agent review gates ensure quality before phase progression.
+Parallel execution via tokio JoinSet with isolation-gate pre-check.
 
 ## Constraints
 
@@ -57,11 +62,14 @@ Intelligent phase analysis — breaking any software project into well-structure
 
 | Decision | Rationale | Outcome |
 |----------|-----------|---------|
-| Rust for CLI | Performance, single binary, strong types for complex orchestration | — Pending |
-| Module isolation over merge-based | Eliminates conflict resolution complexity; agents work in parallel safely | — Pending |
-| Cross-review over self-review | Catches blind spots — different model perspectives improve quality | — Pending |
-| Phase analysis as core value | Multi-agent execution is useless without intelligent decomposition | — Pending |
-| User-owned API keys | Simpler v1, no billing/auth infrastructure needed | — Pending |
+| Rust for CLI | Performance, single binary, strong types for complex orchestration | ✓ Good — type system caught many orchestration bugs at compile time |
+| Module isolation over merge-based | Eliminates conflict resolution complexity; agents work in parallel safely | ✓ Good — clean parallel execution with no file conflicts |
+| Cross-review over self-review | Catches blind spots — different model perspectives improve quality | ✓ Good — different agent perspectives catch issues |
+| Phase analysis as core value | Multi-agent execution is useless without intelligent decomposition | ✓ Good — DAG-based decomposition is the foundation |
+| User-owned API keys | Simpler v1, no billing/auth infrastructure needed | ✓ Good — no SaaS infrastructure overhead |
+| Typestate pattern for PhaseRunner | Compile-time enforcement of valid state transitions | ✓ Good — invalid transitions impossible |
+| Arc<AgentRegistry> for parallel dispatch | Safe sharing across spawned tokio tasks | ✓ Good — clean concurrent access |
+| CircuitBreaker per provider | Fail-fast on unhealthy providers without cascading failures | ✓ Good — prevents retry storms |
 
 ---
-*Last updated: 2026-03-12 after initialization*
+*Last updated: 2026-03-13 after v1.0 milestone*
