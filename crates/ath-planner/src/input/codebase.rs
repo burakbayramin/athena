@@ -142,21 +142,23 @@ pub fn scan_codebase(path: &Path) -> Result<(String, Vec<(String, String)>), Inp
         tree_lines.push(format!("{}{}{}", indent, name, suffix));
 
         // Check if this is a key file (only for regular files)
-        if entry.file_type().is_some_and(|ft| ft.is_file()) && is_key_file(rel_path)
-            && total_key_bytes < MAX_TOTAL_KEY_FILE_SIZE {
-                if let Ok(content) = std::fs::read_to_string(entry_path) {
-                    let rel_str = rel_path.to_string_lossy().replace('\\', "/");
-                    let truncated = if content.len() > MAX_SINGLE_FILE_SIZE {
-                        let mut t = content[..MAX_SINGLE_FILE_SIZE].to_string();
-                        t.push_str("\n[truncated at 5KB]");
-                        t
-                    } else {
-                        content
-                    };
-                    total_key_bytes += truncated.len();
-                    key_files.push((rel_str, truncated));
-                }
+        if entry.file_type().is_some_and(|ft| ft.is_file())
+            && is_key_file(rel_path)
+            && total_key_bytes < MAX_TOTAL_KEY_FILE_SIZE
+        {
+            if let Ok(content) = std::fs::read_to_string(entry_path) {
+                let rel_str = rel_path.to_string_lossy().replace('\\', "/");
+                let truncated = if content.len() > MAX_SINGLE_FILE_SIZE {
+                    let mut t = content[..MAX_SINGLE_FILE_SIZE].to_string();
+                    t.push_str("\n[truncated at 5KB]");
+                    t
+                } else {
+                    content
+                };
+                total_key_bytes += truncated.len();
+                key_files.push((rel_str, truncated));
             }
+        }
     }
 
     let tree_string = tree_lines.join("\n");
@@ -199,18 +201,34 @@ mod tests {
         create_file(tmp.path(), "src/main.rs", "fn main() {}");
 
         let (tree, _) = scan_codebase(tmp.path()).unwrap();
-        assert!(!tree.contains(".git"), "tree should not contain .git: {}", tree);
-        assert!(!tree.contains("HEAD"), "tree should not contain HEAD: {}", tree);
+        assert!(
+            !tree.contains(".git"),
+            "tree should not contain .git: {}",
+            tree
+        );
+        assert!(
+            !tree.contains("HEAD"),
+            "tree should not contain HEAD: {}",
+            tree
+        );
     }
 
     #[test]
     fn scan_codebase_skips_node_modules() {
         let tmp = TempDir::new().unwrap();
-        create_file(tmp.path(), "node_modules/foo/index.js", "module.exports = {}");
+        create_file(
+            tmp.path(),
+            "node_modules/foo/index.js",
+            "module.exports = {}",
+        );
         create_file(tmp.path(), "src/main.rs", "fn main() {}");
 
         let (tree, _) = scan_codebase(tmp.path()).unwrap();
-        assert!(!tree.contains("node_modules"), "tree should not contain node_modules: {}", tree);
+        assert!(
+            !tree.contains("node_modules"),
+            "tree should not contain node_modules: {}",
+            tree
+        );
     }
 
     #[test]
@@ -221,7 +239,10 @@ mod tests {
 
         let (_, key_files) = scan_codebase(tmp.path()).unwrap();
         let cargo = key_files.iter().find(|(p, _)| p == "Cargo.toml");
-        assert!(cargo.is_some(), "Cargo.toml should be identified as key file");
+        assert!(
+            cargo.is_some(),
+            "Cargo.toml should be identified as key file"
+        );
         assert!(cargo.unwrap().1.contains("test-project"));
     }
 
@@ -232,17 +253,27 @@ mod tests {
 
         let (_, key_files) = scan_codebase(tmp.path()).unwrap();
         let readme = key_files.iter().find(|(p, _)| p == "README.md");
-        assert!(readme.is_some(), "README.md should be identified as key file");
+        assert!(
+            readme.is_some(),
+            "README.md should be identified as key file"
+        );
     }
 
     #[test]
     fn scan_codebase_identifies_src_main_rs_as_key_file() {
         let tmp = TempDir::new().unwrap();
-        create_file(tmp.path(), "src/main.rs", "fn main() { println!(\"hello\"); }");
+        create_file(
+            tmp.path(),
+            "src/main.rs",
+            "fn main() { println!(\"hello\"); }",
+        );
 
         let (_, key_files) = scan_codebase(tmp.path()).unwrap();
         let main = key_files.iter().find(|(p, _)| p == "src/main.rs");
-        assert!(main.is_some(), "src/main.rs should be identified as key file");
+        assert!(
+            main.is_some(),
+            "src/main.rs should be identified as key file"
+        );
     }
 
     #[test]
@@ -266,9 +297,15 @@ mod tests {
 
         let (_, key_files) = scan_codebase(tmp.path()).unwrap();
         let readme = key_files.iter().find(|(p, _)| p == "README.md").unwrap();
-        assert!(readme.1.contains("[truncated at 5KB]"), "should have truncation marker");
+        assert!(
+            readme.1.contains("[truncated at 5KB]"),
+            "should have truncation marker"
+        );
         // Truncated content should be MAX_SINGLE_FILE_SIZE + marker length
-        assert!(readme.1.len() < big_content.len(), "truncated should be smaller than original");
+        assert!(
+            readme.1.len() < big_content.len(),
+            "truncated should be smaller than original"
+        );
     }
 
     #[test]
@@ -291,9 +328,17 @@ mod tests {
         let total: usize = key_files.iter().map(|(_, c)| c.len()).sum();
         // We should have read some files but total should be capped around 30KB
         // (might slightly exceed due to the last file added before check)
-        assert!(key_files.len() < 10, "should have stopped before reading all key files, got {}", key_files.len());
+        assert!(
+            key_files.len() < 10,
+            "should have stopped before reading all key files, got {}",
+            key_files.len()
+        );
         // Total should be roughly at or below 2x the budget (budget checked before each add)
-        assert!(total < MAX_TOTAL_KEY_FILE_SIZE * 2, "total {} should be reasonable", total);
+        assert!(
+            total < MAX_TOTAL_KEY_FILE_SIZE * 2,
+            "total {} should be reasonable",
+            total
+        );
     }
 
     #[test]

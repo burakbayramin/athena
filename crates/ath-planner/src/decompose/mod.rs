@@ -107,11 +107,7 @@ pub async fn decompose_project_spec(
 ///
 /// Caps at 5 errors to avoid prompt bloat.
 fn format_validation_errors(errors: &[ValidationError]) -> String {
-    let mut lines: Vec<String> = errors
-        .iter()
-        .take(5)
-        .map(|e| format!("- {}", e))
-        .collect();
+    let mut lines: Vec<String> = errors.iter().take(5).map(|e| format!("- {}", e)).collect();
 
     if errors.len() > 5 {
         lines.push(format!("... and {} more errors", errors.len() - 5));
@@ -376,10 +372,9 @@ mod tests {
         let (plan, warnings) = result.unwrap();
         assert_eq!(plan.phases.len(), 1);
         assert!(!warnings.is_empty());
-        assert!(warnings.iter().any(|w| matches!(
-            w,
-            PlanWarning::LargePhase { task_count: 6, .. }
-        )));
+        assert!(warnings
+            .iter()
+            .any(|w| matches!(w, PlanWarning::LargePhase { task_count: 6, .. })));
     }
 
     #[test]

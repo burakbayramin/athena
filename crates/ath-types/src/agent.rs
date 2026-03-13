@@ -85,12 +85,18 @@ mod tests {
 
     #[test]
     fn agent_kind_provider_name_claude() {
-        assert_eq!(AgentKind::Claude("opus-4".into()).provider_name(), "Anthropic");
+        assert_eq!(
+            AgentKind::Claude("opus-4".into()).provider_name(),
+            "Anthropic"
+        );
     }
 
     #[test]
     fn agent_kind_provider_name_gemini() {
-        assert_eq!(AgentKind::Gemini("2.5-pro".into()).provider_name(), "Google");
+        assert_eq!(
+            AgentKind::Gemini("2.5-pro".into()).provider_name(),
+            "Google"
+        );
     }
 
     #[test]

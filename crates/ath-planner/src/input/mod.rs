@@ -114,11 +114,7 @@ pub async fn parse_to_project_spec(
                 match spec.validate() {
                     Ok(()) => return Ok(spec),
                     Err(e) => {
-                        last_error = Some(format!(
-                            "Validation failed: {}. Hint: {}",
-                            e,
-                            e.hint()
-                        ));
+                        last_error = Some(format!("Validation failed: {}. Hint: {}", e, e.hint()));
                     }
                 }
             }
@@ -160,11 +156,9 @@ pub async fn parse_input(
         }
         InputMode::Codebase { path, intent } => {
             let scan_path = path.clone();
-            let (tree, key_files) = tokio::task::spawn_blocking(move || {
-                scan_codebase(&scan_path)
-            })
-            .await
-            .map_err(|e| InputError::Io(std::io::Error::other(e)))??;
+            let (tree, key_files) = tokio::task::spawn_blocking(move || scan_codebase(&scan_path))
+                .await
+                .map_err(|e| InputError::Io(std::io::Error::other(e)))??;
 
             parse_to_project_spec(backend, move |last_err| {
                 build_codebase_request(&tree, &key_files, intent.as_deref(), last_err)
@@ -191,14 +185,8 @@ pub fn display_project_spec_summary(spec: &ProjectSpec) {
         }
     }
 
-    let lang = spec
-        .target_language
-        .as_deref()
-        .unwrap_or("not specified");
-    let fw = spec
-        .target_framework
-        .as_deref()
-        .unwrap_or("not specified");
+    let lang = spec.target_language.as_deref().unwrap_or("not specified");
+    let fw = spec.target_framework.as_deref().unwrap_or("not specified");
     println!("{} {} / {}", "Target:".bold(), lang, fw);
 
     println!("{} {}", "Constraints:".bold(), spec.constraints.len());
@@ -321,7 +309,10 @@ mod tests {
     fn resolve_codebase_without_description_errors() {
         let codebase = Path::new("./proj");
         let result = resolve_input_mode(None, None, Some(codebase));
-        assert!(matches!(result, Err(InputError::CodebaseWithoutIntent { .. })));
+        assert!(matches!(
+            result,
+            Err(InputError::CodebaseWithoutIntent { .. })
+        ));
     }
 
     #[test]

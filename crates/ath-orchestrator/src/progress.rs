@@ -117,8 +117,8 @@ pub fn wants_transcripts(observer: Option<&SharedProgressObserver>) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::error::PhaseRunnerError;
     use crate::coordinator::AgentCoordinator;
+    use crate::error::PhaseRunnerError;
     use crate::phase_runner::{run_phase_with_progress, AgentRegistry, FileOutput};
     use ath_agents::MockBackend;
     use ath_types::agent::AgentResponse;
@@ -169,8 +169,7 @@ mod tests {
     }
 
     fn make_plan(phases: Vec<PhaseSpec>, execution_order: Vec<u32>) -> ExecutionPlan {
-        let parallel_groups: Vec<Vec<u32>> =
-            execution_order.iter().map(|&id| vec![id]).collect();
+        let parallel_groups: Vec<Vec<u32>> = execution_order.iter().map(|&id| vec![id]).collect();
         ExecutionPlan {
             phases,
             execution_order,
@@ -214,7 +213,11 @@ mod tests {
         let claude = AgentKind::Claude("opus-4".into());
         let gemini = AgentKind::Gemini("2.5-pro".into());
 
-        let phase = make_phase(1, "phase-1", vec![make_task_spec("task-1", Some(claude.clone()))]);
+        let phase = make_phase(
+            1,
+            "phase-1",
+            vec![make_task_spec("task-1", Some(claude.clone()))],
+        );
         let plan = make_plan(vec![phase], vec![1]);
 
         let task_mock = Arc::new(MockBackend::new(vec![Ok(mock_response(
@@ -239,7 +242,10 @@ mod tests {
             .expect("plan executes");
 
         let events = observer.events();
-        assert!(matches!(events.first(), Some(ProgressEvent::PhaseStarted { .. })));
+        assert!(matches!(
+            events.first(),
+            Some(ProgressEvent::PhaseStarted { .. })
+        ));
 
         let first_task_event = events
             .iter()
@@ -282,9 +288,16 @@ mod tests {
         let progress: SharedProgressObserver = observer.clone();
         let write_files = |_: &[FileOutput]| -> Result<(), PhaseRunnerError> { Ok(()) };
 
-        run_phase_with_progress(&phase, &registry, |_| true, write_files, None, Some(progress))
-            .await
-            .expect("phase executes");
+        run_phase_with_progress(
+            &phase,
+            &registry,
+            |_| true,
+            write_files,
+            None,
+            Some(progress),
+        )
+        .await
+        .expect("phase executes");
 
         let events = observer.events();
         let task_events: Vec<_> = events
@@ -336,7 +349,11 @@ mod tests {
         let claude = AgentKind::Claude("opus-4".into());
         let gemini = AgentKind::Gemini("2.5-pro".into());
 
-        let phase = make_phase(1, "phase-1", vec![make_task_spec("task-1", Some(claude.clone()))]);
+        let phase = make_phase(
+            1,
+            "phase-1",
+            vec![make_task_spec("task-1", Some(claude.clone()))],
+        );
 
         let task_mock = Arc::new(MockBackend::new(vec![Ok(mock_response(
             &make_task_output_json("task-1", &claude, "src/main.rs"),
@@ -352,9 +369,16 @@ mod tests {
         let progress: SharedProgressObserver = observer.clone();
         let write_files = |_: &[FileOutput]| -> Result<(), PhaseRunnerError> { Ok(()) };
 
-        run_phase_with_progress(&phase, &registry, |_| true, write_files, None, Some(progress))
-            .await
-            .expect("phase executes");
+        run_phase_with_progress(
+            &phase,
+            &registry,
+            |_| true,
+            write_files,
+            None,
+            Some(progress),
+        )
+        .await
+        .expect("phase executes");
 
         let events = observer.events();
         let review_started = events
@@ -374,7 +398,11 @@ mod tests {
         let claude = AgentKind::Claude("opus-4".into());
         let gemini = AgentKind::Gemini("2.5-pro".into());
 
-        let phase = make_phase(1, "phase-1", vec![make_task_spec("task-1", Some(claude.clone()))]);
+        let phase = make_phase(
+            1,
+            "phase-1",
+            vec![make_task_spec("task-1", Some(claude.clone()))],
+        );
 
         let task_mock = Arc::new(MockBackend::new(vec![
             Ok(mock_response(
@@ -399,9 +427,16 @@ mod tests {
         let progress: SharedProgressObserver = observer.clone();
         let write_files = |_: &[FileOutput]| -> Result<(), PhaseRunnerError> { Ok(()) };
 
-        run_phase_with_progress(&phase, &registry, |_| true, write_files, None, Some(progress))
-            .await
-            .expect("phase executes");
+        run_phase_with_progress(
+            &phase,
+            &registry,
+            |_| true,
+            write_files,
+            None,
+            Some(progress),
+        )
+        .await
+        .expect("phase executes");
 
         let events = observer.events();
         let failed = events
@@ -428,7 +463,11 @@ mod tests {
         let claude = AgentKind::Claude("opus-4".into());
         let gemini = AgentKind::Gemini("2.5-pro".into());
 
-        let phase = make_phase(1, "phase-1", vec![make_task_spec("task-1", Some(claude.clone()))]);
+        let phase = make_phase(
+            1,
+            "phase-1",
+            vec![make_task_spec("task-1", Some(claude.clone()))],
+        );
         let plan = make_plan(vec![phase], vec![1]);
 
         let task_mock = Arc::new(MockBackend::new(vec![Ok(mock_response(
@@ -558,8 +597,11 @@ mod verbose {
         async fn task_execution_emits_transcript_payloads_when_enabled() {
             let claude = AgentKind::Claude("opus-4".into());
             let gemini = AgentKind::Gemini("2.5-pro".into());
-            let phase =
-                make_phase(1, "phase-1", vec![make_task_spec("task-1", Some(claude.clone()))]);
+            let phase = make_phase(
+                1,
+                "phase-1",
+                vec![make_task_spec("task-1", Some(claude.clone()))],
+            );
 
             let task_mock = Arc::new(MockBackend::new(vec![Ok(mock_response(
                 &make_task_output_json("task-1", &claude, "src/main.rs"),
@@ -575,9 +617,16 @@ mod verbose {
             let progress: SharedProgressObserver = observer.clone();
             let write_files = |_: &[FileOutput]| -> Result<(), PhaseRunnerError> { Ok(()) };
 
-            run_phase_with_progress(&phase, &registry, |_| true, write_files, None, Some(progress))
-                .await
-                .expect("phase executes");
+            run_phase_with_progress(
+                &phase,
+                &registry,
+                |_| true,
+                write_files,
+                None,
+                Some(progress),
+            )
+            .await
+            .expect("phase executes");
 
             let transcripts = observer.transcripts();
             assert!(transcripts.iter().any(|transcript| {
@@ -591,8 +640,11 @@ mod verbose {
         async fn review_dispatch_emits_reviewer_prompt_and_verdict_transcript() {
             let claude = AgentKind::Claude("opus-4".into());
             let gemini = AgentKind::Gemini("2.5-pro".into());
-            let phase =
-                make_phase(1, "phase-1", vec![make_task_spec("task-1", Some(claude.clone()))]);
+            let phase = make_phase(
+                1,
+                "phase-1",
+                vec![make_task_spec("task-1", Some(claude.clone()))],
+            );
 
             let task_mock = Arc::new(MockBackend::new(vec![Ok(mock_response(
                 &make_task_output_json("task-1", &claude, "src/main.rs"),
@@ -608,9 +660,16 @@ mod verbose {
             let progress: SharedProgressObserver = observer.clone();
             let write_files = |_: &[FileOutput]| -> Result<(), PhaseRunnerError> { Ok(()) };
 
-            run_phase_with_progress(&phase, &registry, |_| true, write_files, None, Some(progress))
-                .await
-                .expect("phase executes");
+            run_phase_with_progress(
+                &phase,
+                &registry,
+                |_| true,
+                write_files,
+                None,
+                Some(progress),
+            )
+            .await
+            .expect("phase executes");
 
             let transcripts = observer.transcripts();
             assert!(transcripts.iter().any(|transcript| {
@@ -624,8 +683,11 @@ mod verbose {
         async fn retry_feedback_is_exposed_as_transcript_context_for_next_attempt() {
             let claude = AgentKind::Claude("opus-4".into());
             let gemini = AgentKind::Gemini("2.5-pro".into());
-            let phase =
-                make_phase(1, "phase-1", vec![make_task_spec("task-1", Some(claude.clone()))]);
+            let phase = make_phase(
+                1,
+                "phase-1",
+                vec![make_task_spec("task-1", Some(claude.clone()))],
+            );
 
             let task_mock = Arc::new(MockBackend::new(vec![
                 Ok(mock_response(
@@ -650,9 +712,16 @@ mod verbose {
             let progress: SharedProgressObserver = observer.clone();
             let write_files = |_: &[FileOutput]| -> Result<(), PhaseRunnerError> { Ok(()) };
 
-            run_phase_with_progress(&phase, &registry, |_| true, write_files, None, Some(progress))
-                .await
-                .expect("phase executes");
+            run_phase_with_progress(
+                &phase,
+                &registry,
+                |_| true,
+                write_files,
+                None,
+                Some(progress),
+            )
+            .await
+            .expect("phase executes");
 
             let transcripts = observer.transcripts();
             assert!(transcripts.iter().any(|transcript| {
@@ -665,8 +734,11 @@ mod verbose {
         async fn normal_mode_runs_without_transcript_capture_enabled() {
             let claude = AgentKind::Claude("opus-4".into());
             let gemini = AgentKind::Gemini("2.5-pro".into());
-            let phase =
-                make_phase(1, "phase-1", vec![make_task_spec("task-1", Some(claude.clone()))]);
+            let phase = make_phase(
+                1,
+                "phase-1",
+                vec![make_task_spec("task-1", Some(claude.clone()))],
+            );
 
             let task_mock = Arc::new(MockBackend::new(vec![Ok(mock_response(
                 &make_task_output_json("task-1", &claude, "src/main.rs"),

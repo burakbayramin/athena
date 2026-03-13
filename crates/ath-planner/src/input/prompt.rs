@@ -196,9 +196,10 @@ mod tests {
     #[test]
     fn build_codebase_request_includes_tree_and_files() {
         let tree = "src/\n  main.rs\n  lib.rs";
-        let key_files = vec![
-            ("Cargo.toml".to_string(), "[package]\nname = \"test\"".to_string()),
-        ];
+        let key_files = vec![(
+            "Cargo.toml".to_string(),
+            "[package]\nname = \"test\"".to_string(),
+        )];
         let req = build_codebase_request(tree, &key_files, Some("add auth"), None);
         assert!(req.prompt.contains("main.rs"));
         assert!(req.prompt.contains("Cargo.toml"));

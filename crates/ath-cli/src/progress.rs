@@ -50,9 +50,8 @@ pub(crate) struct TerminalProgressReporter {
 
 impl TerminalProgressReporter {
     pub(crate) fn new(global: GlobalArgs) -> Self {
-        let interactive = io::stdout().is_terminal()
-            && !global.no_color
-            && std::env::var("NO_COLOR").is_err();
+        let interactive =
+            io::stdout().is_terminal() && !global.no_color && std::env::var("NO_COLOR").is_err();
         Self::with_mode(interactive, true)
     }
 
@@ -492,9 +491,13 @@ mod tests {
         });
 
         let milestones = reporter.milestone_lines();
-        assert!(milestones.iter().any(|line| line.contains("Review started")));
+        assert!(milestones
+            .iter()
+            .any(|line| line.contains("Review started")));
         assert!(milestones.iter().any(|line| line.contains("Review failed")));
-        assert!(milestones.iter().any(|line| line.contains("Retrying foundation")));
+        assert!(milestones
+            .iter()
+            .any(|line| line.contains("Retrying foundation")));
     }
 
     #[test]
@@ -518,7 +521,9 @@ mod tests {
 
         let lines = reporter.plain_lines();
         assert!(lines.iter().any(|line| line.contains("Phase 1/2 started")));
-        assert!(lines.iter().any(|line| line.contains("running: route via Anthropic/opus-4")));
+        assert!(lines
+            .iter()
+            .any(|line| line.contains("running: route via Anthropic/opus-4")));
         assert!(lines.iter().all(|line| !line.contains('\u{1b}')));
     }
 }

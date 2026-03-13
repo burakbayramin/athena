@@ -41,7 +41,9 @@ pub async fn read_spec_file(path: &Path) -> Result<String, InputError> {
     }
 
     // Read contents
-    let content = tokio::fs::read_to_string(path).await.map_err(InputError::Io)?;
+    let content = tokio::fs::read_to_string(path)
+        .await
+        .map_err(InputError::Io)?;
 
     Ok(content)
 }

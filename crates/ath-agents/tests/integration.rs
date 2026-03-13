@@ -263,7 +263,10 @@ async fn circuit_breaker_recovers_after_cooldown() {
     // Probe succeeds -> circuit closes
     cb.record_success();
     assert!(!cb.is_open(), "should close after successful probe");
-    assert!(cb.can_attempt(), "should allow normal attempts after closing");
+    assert!(
+        cb.can_attempt(),
+        "should allow normal attempts after closing"
+    );
 }
 
 // Note: Circuit breaker integration with actual provider actors is verified

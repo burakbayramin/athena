@@ -246,8 +246,12 @@ mod tests {
         )));
 
         let blocks = sink.blocks();
-        assert!(blocks.iter().any(|block| block.contains("[Reviewer Transcript]")));
-        assert!(blocks.iter().any(|block| block.contains("[Retry Feedback]")));
+        assert!(blocks
+            .iter()
+            .any(|block| block.contains("[Reviewer Transcript]")));
+        assert!(blocks
+            .iter()
+            .any(|block| block.contains("[Retry Feedback]")));
     }
 
     #[test]

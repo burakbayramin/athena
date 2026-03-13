@@ -120,10 +120,9 @@ fn find_cycle_path(phases: &[PhaseSpec]) -> Vec<u32> {
     ids.sort();
 
     for &id in &ids {
-        if color[&id] == Color::White
-            && dfs(id, &dep_map, &mut color, &mut stack, &mut cycle) {
-                return cycle;
-            }
+        if color[&id] == Color::White && dfs(id, &dep_map, &mut color, &mut stack, &mut cycle) {
+            return cycle;
+        }
     }
 
     cycle
@@ -271,10 +270,7 @@ mod tests {
     #[test]
     fn topo_sort_disconnected() {
         // A, B -- no dependencies
-        let phases = vec![
-            make_phase(1, "A", vec![]),
-            make_phase(2, "B", vec![]),
-        ];
+        let phases = vec![make_phase(1, "A", vec![]), make_phase(2, "B", vec![])];
         let result = topological_sort(&phases).expect("should succeed");
         assert_eq!(result.len(), 2);
         assert!(result.contains(&1));

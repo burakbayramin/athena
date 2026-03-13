@@ -20,17 +20,11 @@ use crate::phase_runner::TaskOutput;
 pub enum ReviewError {
     /// No eligible reviewer is available (all non-author agents are down).
     #[error("no reviewer available for phase '{phase_name}': {reason}")]
-    NoReviewerAvailable {
-        phase_name: String,
-        reason: String,
-    },
+    NoReviewerAvailable { phase_name: String, reason: String },
 
     /// Failed to parse the review verdict JSON from the reviewer agent.
     #[error("verdict parse failed: {reason}\nraw: {raw}")]
-    VerdictParseFailed {
-        raw: String,
-        reason: String,
-    },
+    VerdictParseFailed { raw: String, reason: String },
 }
 
 /// All three agent kinds in priority order (Claude > Gemini > Codex).
@@ -103,11 +97,7 @@ pub fn select_reviewer(
 ///
 /// The reviewer receives the full context: original task spec, all produced files
 /// with contents, and the agent's explanation of what it did.
-pub fn build_review_prompt(
-    phase_name: &str,
-    tasks: &[TaskSpec],
-    outputs: &[TaskOutput],
-) -> String {
+pub fn build_review_prompt(phase_name: &str, tasks: &[TaskSpec], outputs: &[TaskOutput]) -> String {
     let mut prompt = format!("## Phase Review: {phase_name}\n\n");
 
     for (task, output) in tasks.iter().zip(outputs.iter()) {
@@ -174,14 +164,12 @@ struct RawSuggestion {
 ///
 /// Severity is parsed case-insensitively. Missing optional `suggestions` defaults
 /// to an empty list.
-pub fn parse_review_verdict(
-    json: &str,
-    reviewer: AgentKind,
-) -> Result<ReviewVerdict, ReviewError> {
-    let raw: RawVerdict = serde_json::from_str(json).map_err(|e| ReviewError::VerdictParseFailed {
-        raw: json.to_string(),
-        reason: e.to_string(),
-    })?;
+pub fn parse_review_verdict(json: &str, reviewer: AgentKind) -> Result<ReviewVerdict, ReviewError> {
+    let raw: RawVerdict =
+        serde_json::from_str(json).map_err(|e| ReviewError::VerdictParseFailed {
+            raw: json.to_string(),
+            reason: e.to_string(),
+        })?;
 
     let severity = match raw.severity.to_lowercase().as_str() {
         "critical" => Severity::Critical,
@@ -470,8 +458,7 @@ mod tests {
             ]
         }"#;
 
-        let verdict =
-            parse_review_verdict(json, AgentKind::Gemini("2.5-pro".into())).unwrap();
+        let verdict = parse_review_verdict(json, AgentKind::Gemini("2.5-pro".into())).unwrap();
 
         assert!(!verdict.passed);
         assert_eq!(verdict.severity, Severity::Critical);
@@ -501,8 +488,7 @@ mod tests {
             "reason": "Looks good"
         }"#;
 
-        let verdict =
-            parse_review_verdict(json, AgentKind::Claude("opus-4".into())).unwrap();
+        let verdict = parse_review_verdict(json, AgentKind::Claude("opus-4".into())).unwrap();
 
         assert!(verdict.passed);
         assert_eq!(verdict.severity, Severity::Info);
@@ -585,8 +571,7 @@ mod tests {
     #[test]
     fn parse_verdict_case_insensitive_severity() {
         let json = r#"{"passed": true, "severity": "WARNING", "reason": "ok", "suggestions": []}"#;
-        let verdict =
-            parse_review_verdict(json, AgentKind::Claude("opus-4".into())).unwrap();
+        let verdict = parse_review_verdict(json, AgentKind::Claude("opus-4".into())).unwrap();
         assert_eq!(verdict.severity, Severity::Warning);
     }
 

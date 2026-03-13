@@ -112,7 +112,11 @@ pub fn route_task(
 
     // All candidates unavailable — also try default if it wasn't a candidate
     let default = taxonomy::default_agent();
-    if available(&default) && !candidates.iter().any(|(a, _)| mem::discriminant(a) == mem::discriminant(&default)) {
+    if available(&default)
+        && !candidates
+            .iter()
+            .any(|(a, _)| mem::discriminant(a) == mem::discriminant(&default))
+    {
         return Ok(RoutingDecision {
             agent: default,
             rationale: format!(
@@ -306,7 +310,11 @@ mod tests {
         assert_eq!(decisions.len(), 3);
         // Every task should now have an assigned agent
         for task in &phase.tasks {
-            assert!(task.assigned_agent.is_some(), "Task '{}' has no agent", task.name);
+            assert!(
+                task.assigned_agent.is_some(),
+                "Task '{}' has no agent",
+                task.name
+            );
         }
     }
 
@@ -314,16 +322,25 @@ mod tests {
     fn assign_all_tasks_routes_to_correct_agents() {
         let table = build_routing_table();
         let mut phase = make_phase(vec![
-            make_task("Rust task", &["rust", "logic"]),      // -> Claude
-            make_task("Docs task", &["docs", "research"]),   // -> Gemini
+            make_task("Rust task", &["rust", "logic"]),    // -> Claude
+            make_task("Docs task", &["docs", "research"]), // -> Gemini
             make_task("Gen task", &["codegen", "boilerplate"]), // -> Codex
         ]);
 
         let decisions = assign_all_tasks(&mut phase, &table, |_| true).unwrap();
 
-        assert!(matches!(phase.tasks[0].assigned_agent, Some(AgentKind::Claude(_))));
-        assert!(matches!(phase.tasks[1].assigned_agent, Some(AgentKind::Gemini(_))));
-        assert!(matches!(phase.tasks[2].assigned_agent, Some(AgentKind::Codex(_))));
+        assert!(matches!(
+            phase.tasks[0].assigned_agent,
+            Some(AgentKind::Claude(_))
+        ));
+        assert!(matches!(
+            phase.tasks[1].assigned_agent,
+            Some(AgentKind::Gemini(_))
+        ));
+        assert!(matches!(
+            phase.tasks[2].assigned_agent,
+            Some(AgentKind::Codex(_))
+        ));
 
         // Decisions match task agents
         assert!(matches!(decisions[0].agent, AgentKind::Claude(_)));

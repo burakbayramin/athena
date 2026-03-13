@@ -55,9 +55,7 @@ pub fn classify_error(err: genai::Error, provider: &str) -> AgentError {
             reason: err.to_string(),
         },
 
-        genai::Error::Resolver {
-            resolver_error, ..
-        } => match resolver_error {
+        genai::Error::Resolver { resolver_error, .. } => match resolver_error {
             genai::resolver::Error::ApiKeyEnvNotFound { .. } => AgentError::AuthFailed {
                 provider: provider.to_string(),
                 reason: err.to_string(),
@@ -237,9 +235,7 @@ pub async fn run_with_retry_and_breaker(
 
     let result = tokio::time::timeout(timeout_duration, async {
         // Build the exponential backoff iterator for fallback delays
-        let backoff = backon::ExponentialBuilder::default()
-            .with_jitter()
-            .build();
+        let backoff = backon::ExponentialBuilder::default().with_jitter().build();
         let mut backoff_iter = backoff.into_iter();
 
         let max_attempts = 3;
@@ -282,9 +278,7 @@ pub async fn run_with_retry_and_breaker(
                     {
                         *duration
                     } else {
-                        backoff_iter
-                            .next()
-                            .unwrap_or(Duration::from_secs(60))
+                        backoff_iter.next().unwrap_or(Duration::from_secs(60))
                     };
 
                     last_error = Some(e);

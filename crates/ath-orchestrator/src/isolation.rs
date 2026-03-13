@@ -55,8 +55,7 @@ pub fn check_isolation(plan: &ExecutionPlan) -> Result<(), IsolationError> {
                             phase_a: existing_phase,
                             task_b: task.name.clone(),
                             phase_b: phase_id,
-                            hint: "Split into separate phases or consolidate into one task"
-                                .into(),
+                            hint: "Split into separate phases or consolidate into one task".into(),
                         });
                     } else {
                         ownership.insert(file.as_str(), (phase_id, &task.name));
@@ -74,7 +73,11 @@ pub fn check_isolation(plan: &ExecutionPlan) -> Result<(), IsolationError> {
 /// Returns a list of warnings (empty if everything matches). Warnings are
 /// informational only -- they do not block execution.
 pub fn audit_outputs(task: &TaskSpec, actual_files: &[String]) -> Vec<AuditWarning> {
-    let expected: HashSet<&str> = task.expected_output_files.iter().map(|s| s.as_str()).collect();
+    let expected: HashSet<&str> = task
+        .expected_output_files
+        .iter()
+        .map(|s| s.as_str())
+        .collect();
     let actual: HashSet<&str> = actual_files.iter().map(|s| s.as_str()).collect();
 
     let mut unexpected: Vec<String> = actual
@@ -153,8 +156,18 @@ mod tests {
 
     #[test]
     fn check_isolation_overlapping_parallel_phases_conflict() {
-        let p1 = make_phase(1, "Phase A", vec![make_task("T1", &["src/main.rs"])], vec![]);
-        let p2 = make_phase(2, "Phase B", vec![make_task("T2", &["src/main.rs"])], vec![]);
+        let p1 = make_phase(
+            1,
+            "Phase A",
+            vec![make_task("T1", &["src/main.rs"])],
+            vec![],
+        );
+        let p2 = make_phase(
+            2,
+            "Phase B",
+            vec![make_task("T2", &["src/main.rs"])],
+            vec![],
+        );
         let plan = make_plan(vec![p1, p2], vec![vec![1, 2]]);
         let err = check_isolation(&plan).unwrap_err();
         match &err {

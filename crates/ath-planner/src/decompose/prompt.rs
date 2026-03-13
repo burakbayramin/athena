@@ -80,10 +80,7 @@ pub fn execution_plan_json_schema() -> serde_json::Value {
 ///
 /// Serializes the ProjectSpec as JSON in the user message. If `last_error` is Some,
 /// appends error feedback for retry.
-pub fn build_decompose_request(
-    project: &ProjectSpec,
-    last_error: Option<&str>,
-) -> AgentRequest {
+pub fn build_decompose_request(project: &ProjectSpec, last_error: Option<&str>) -> AgentRequest {
     let project_json =
         serde_json::to_string_pretty(project).expect("ProjectSpec should serialize to JSON");
 
@@ -158,7 +155,8 @@ mod tests {
     #[test]
     fn build_decompose_request_with_error_appends_feedback() {
         let project = test_project();
-        let req = build_decompose_request(&project, Some("Circular dependency detected: 1 -> 2 -> 1"));
+        let req =
+            build_decompose_request(&project, Some("Circular dependency detected: 1 -> 2 -> 1"));
         assert!(req.prompt.contains("test-app"));
         assert!(req.prompt.contains("Your previous attempt had errors"));
         assert!(req.prompt.contains("Circular dependency detected"));

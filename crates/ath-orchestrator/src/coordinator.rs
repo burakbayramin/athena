@@ -122,9 +122,8 @@ impl AgentCoordinator {
                 };
 
                 let registry = &*self.registry;
-                let available = |kind: &ath_types::agent::AgentKind| -> bool {
-                    registry.get(kind).is_some()
-                };
+                let available =
+                    |kind: &ath_types::agent::AgentKind| -> bool { registry.get(kind).is_some() };
 
                 let record = run_phase_with_progress(
                     phase,
@@ -184,11 +183,7 @@ impl AgentCoordinator {
                                 phase_name: phase_name.clone(),
                                 phase_index: group_phase_index,
                                 total_phases,
-                                tasks: phase
-                                    .tasks
-                                    .iter()
-                                    .map(|task| task.name.clone())
-                                    .collect(),
+                                tasks: phase.tasks.iter().map(|task| task.name.clone()).collect(),
                             },
                         );
 
@@ -293,7 +288,10 @@ impl AgentCoordinator {
 }
 
 /// Write files to the output directory, creating parent directories as needed.
-fn write_files_to_dir(files: &[FileOutput], output_dir: &std::path::Path) -> Result<(), PhaseRunnerError> {
+fn write_files_to_dir(
+    files: &[FileOutput],
+    output_dir: &std::path::Path,
+) -> Result<(), PhaseRunnerError> {
     for file in files {
         let path = output_dir.join(&file.path);
         if let Some(parent) = path.parent() {
@@ -377,8 +375,7 @@ mod tests {
 
     fn make_plan(phases: Vec<PhaseSpec>, execution_order: Vec<u32>) -> ExecutionPlan {
         // Auto-populate parallel_groups as single-phase groups from execution_order
-        let parallel_groups: Vec<Vec<u32>> =
-            execution_order.iter().map(|&id| vec![id]).collect();
+        let parallel_groups: Vec<Vec<u32>> = execution_order.iter().map(|&id| vec![id]).collect();
         ExecutionPlan {
             phases,
             execution_order,
@@ -581,7 +578,10 @@ mod tests {
 
         // Verify file was written
         let file_path = tmp.path().join("src/main.rs");
-        assert!(file_path.exists(), "Expected file src/main.rs in output_dir");
+        assert!(
+            file_path.exists(),
+            "Expected file src/main.rs in output_dir"
+        );
         let content = std::fs::read_to_string(&file_path).unwrap();
         assert_eq!(content, "fn main() {}");
     }
@@ -706,7 +706,10 @@ mod tests {
 
         // Gemini reviews: fail first, then pass
         let gemini_mock = Arc::new(MockBackend::new(vec![
-            Ok(mock_response(&failing_verdict_json("Missing error handling"), &gemini)),
+            Ok(mock_response(
+                &failing_verdict_json("Missing error handling"),
+                &gemini,
+            )),
             Ok(mock_response(&passing_verdict_json(), &gemini)),
         ]));
 
@@ -757,9 +760,18 @@ mod tests {
 
         // Gemini reviews: fail all 3
         let gemini_mock = Arc::new(MockBackend::new(vec![
-            Ok(mock_response(&failing_verdict_json("Still broken 1"), &gemini)),
-            Ok(mock_response(&failing_verdict_json("Still broken 2"), &gemini)),
-            Ok(mock_response(&failing_verdict_json("Still broken 3"), &gemini)),
+            Ok(mock_response(
+                &failing_verdict_json("Still broken 1"),
+                &gemini,
+            )),
+            Ok(mock_response(
+                &failing_verdict_json("Still broken 2"),
+                &gemini,
+            )),
+            Ok(mock_response(
+                &failing_verdict_json("Still broken 3"),
+                &gemini,
+            )),
         ]));
 
         let mut registry = AgentRegistry::new();
@@ -777,7 +789,10 @@ mod tests {
 
         // Verify error message contains phase name and attempt count
         let msg = err.to_string();
-        assert!(msg.contains("failing-phase"), "error should contain phase name");
+        assert!(
+            msg.contains("failing-phase"),
+            "error should contain phase name"
+        );
         assert!(msg.contains("3"), "error should contain attempt count");
     }
 
@@ -796,7 +811,11 @@ mod tests {
         }
     }
 
-    fn make_task_spec_with_files(name: &str, agent: Option<AgentKind>, files: Vec<&str>) -> TaskSpec {
+    fn make_task_spec_with_files(
+        name: &str,
+        agent: Option<AgentKind>,
+        files: Vec<&str>,
+    ) -> TaskSpec {
         let mut spec = make_task_spec(name, agent);
         spec.expected_output_files = files.into_iter().map(String::from).collect();
         spec
@@ -874,19 +893,13 @@ mod tests {
         let tasks2 = vec![make_task_spec("task-b", Some(claude.clone()))];
         let phase1 = make_phase(1, "par-phase-1", tasks1);
         let phase2 = make_phase(2, "par-phase-2", tasks2);
-        let plan = make_plan_with_groups(
-            vec![phase1, phase2],
-            vec![1, 2],
-            vec![vec![1, 2]],
-        );
+        let plan = make_plan_with_groups(vec![phase1, phase2], vec![1, 2], vec![vec![1, 2]]);
 
         let concurrent = Arc::new(AtomicU32::new(0));
         let max_concurrent = Arc::new(AtomicU32::new(0));
 
         let task_mock = Arc::new(DelayedMockBackend::new(
-            MockBackend::always_ok(
-                &make_task_output_json("task-a", &claude, "src/a.rs"),
-            ),
+            MockBackend::always_ok(&make_task_output_json("task-a", &claude, "src/a.rs")),
             std::time::Duration::from_millis(80),
             Arc::clone(&concurrent),
             Arc::clone(&max_concurrent),
@@ -901,7 +914,11 @@ mod tests {
         let coordinator = AgentCoordinator::new(registry, tmp.path().to_path_buf(), None);
 
         let result = coordinator.run_plan(&plan).await;
-        assert!(result.is_ok(), "parallel plan should succeed: {:?}", result.err());
+        assert!(
+            result.is_ok(),
+            "parallel plan should succeed: {:?}",
+            result.err()
+        );
 
         let records = result.unwrap();
         assert_eq!(records.len(), 2);
@@ -941,9 +958,7 @@ mod tests {
         let max_concurrent = Arc::new(AtomicU32::new(0));
 
         let par_task_mock = Arc::new(DelayedMockBackend::new(
-            MockBackend::always_ok(
-                &make_task_output_json("task-par", &claude, "src/par.rs"),
-            ),
+            MockBackend::always_ok(&make_task_output_json("task-par", &claude, "src/par.rs")),
             std::time::Duration::from_millis(60),
             Arc::clone(&concurrent),
             Arc::clone(&max_concurrent),
@@ -978,9 +993,7 @@ mod tests {
         let seq_max_concurrent = Arc::new(AtomicU32::new(0));
 
         let seq_task_mock = Arc::new(DelayedMockBackend::new(
-            MockBackend::always_ok(
-                &make_task_output_json("task-seq", &claude, "src/seq.rs"),
-            ),
+            MockBackend::always_ok(&make_task_output_json("task-seq", &claude, "src/seq.rs")),
             std::time::Duration::from_millis(60),
             Arc::clone(&seq_concurrent),
             Arc::clone(&seq_max_concurrent),
@@ -1028,17 +1041,15 @@ mod tests {
         )];
         let phase1 = make_phase(1, "par-phase-1", tasks1);
         let phase2 = make_phase(2, "par-phase-2", tasks2);
-        let plan = make_plan_with_groups(
-            vec![phase1, phase2],
-            vec![1, 2],
-            vec![vec![1, 2]],
-        );
+        let plan = make_plan_with_groups(vec![phase1, phase2], vec![1, 2], vec![vec![1, 2]]);
 
         // Use always_ok mocks -- they should never be called because
         // isolation check runs before dispatch.
-        let task_mock = Arc::new(MockBackend::always_ok(
-            &make_task_output_json("unused", &claude, "src/conflict.rs"),
-        ));
+        let task_mock = Arc::new(MockBackend::always_ok(&make_task_output_json(
+            "unused",
+            &claude,
+            "src/conflict.rs",
+        )));
         let reviewer_mock = Arc::new(MockBackend::always_ok(&passing_verdict_json()));
 
         let mut registry = AgentRegistry::new();
@@ -1086,11 +1097,7 @@ mod tests {
         )];
         let phase1 = make_phase(1, "par-phase-1", tasks1);
         let phase2 = make_phase(2, "par-phase-2", tasks2);
-        let plan = make_plan_with_groups(
-            vec![phase1, phase2],
-            vec![1, 2],
-            vec![vec![1, 2]],
-        );
+        let plan = make_plan_with_groups(vec![phase1, phase2], vec![1, 2], vec![vec![1, 2]]);
 
         let task_mock = Arc::new(MockBackend::new(vec![
             Ok(mock_response(
@@ -1112,7 +1119,11 @@ mod tests {
         let coordinator = AgentCoordinator::new(registry, tmp.path().to_path_buf(), None);
 
         let result = coordinator.run_plan(&plan).await;
-        assert!(result.is_ok(), "parallel plan should succeed: {:?}", result.err());
+        assert!(
+            result.is_ok(),
+            "parallel plan should succeed: {:?}",
+            result.err()
+        );
 
         let records = result.unwrap();
         assert_eq!(records.len(), 2, "should have 2 phase records");
@@ -1122,8 +1133,14 @@ mod tests {
         assert_eq!(records[1].phase_name, "par-phase-2");
 
         // Both must have completed_at set
-        assert!(records[0].completed_at.is_some(), "phase-1 should have completed_at");
-        assert!(records[1].completed_at.is_some(), "phase-2 should have completed_at");
+        assert!(
+            records[0].completed_at.is_some(),
+            "phase-1 should have completed_at"
+        );
+        assert!(
+            records[1].completed_at.is_some(),
+            "phase-2 should have completed_at"
+        );
 
         // Verify files from both phases exist in output_dir
         let file_a = tmp.path().join("src/a.rs");

@@ -129,7 +129,10 @@ mod tests {
     fn task_spec_assigned_agent_none_omitted_in_json() {
         let task = sample_task();
         let json = serde_json::to_string(&task).expect("serialize");
-        assert!(!json.contains("assigned_agent"), "None should be skipped in serialization");
+        assert!(
+            !json.contains("assigned_agent"),
+            "None should be skipped in serialization"
+        );
     }
 
     #[test]

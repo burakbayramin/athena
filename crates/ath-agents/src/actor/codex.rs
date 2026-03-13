@@ -15,7 +15,7 @@ use crate::backend::AgentBackend;
 use crate::circuit_breaker::CircuitBreaker;
 use crate::error::AgentError;
 
-use super::{ActorMessage, build_genai_client, run_with_retry_and_breaker};
+use super::{build_genai_client, run_with_retry_and_breaker, ActorMessage};
 
 /// The actor task that owns the genai client and circuit breaker.
 struct CodexActor {

@@ -110,7 +110,10 @@ pub fn validate_plan(
         .map(|p| {
             (
                 p.id,
-                p.produces.iter().map(|c| c.as_str()).collect::<HashSet<_>>(),
+                p.produces
+                    .iter()
+                    .map(|c| c.as_str())
+                    .collect::<HashSet<_>>(),
             )
         })
         .collect();
@@ -152,10 +155,7 @@ pub fn validate_plan(
                 errors.push(ValidationError::UnsatisfiedContract {
                     phase_id: phase.id,
                     contract: contract.clone(),
-                    hint: format!(
-                        "Add a dependency on the phase that produces '{}'",
-                        contract
-                    ),
+                    hint: format!("Add a dependency on the phase that produces '{}'", contract),
                 });
             }
         }
@@ -249,7 +249,14 @@ mod tests {
         let project = make_project(2);
         let phases = vec![
             make_phase_with_tasks(1, "Setup", vec![], vec![make_task(vec![0])], vec![], vec![]),
-            make_phase_with_tasks(2, "Build", vec![1], vec![make_task(vec![1])], vec![], vec![]),
+            make_phase_with_tasks(
+                2,
+                "Build",
+                vec![1],
+                vec![make_task(vec![1])],
+                vec![],
+                vec![],
+            ),
         ];
         let result = validate_plan(&phases, &project);
         assert!(result.is_ok());
@@ -267,7 +274,9 @@ mod tests {
         let result = validate_plan(&phases, &project);
         assert!(result.is_err());
         let errors = result.unwrap_err();
-        assert!(errors.iter().any(|e| matches!(e, ValidationError::CircularDependency { .. })));
+        assert!(errors
+            .iter()
+            .any(|e| matches!(e, ValidationError::CircularDependency { .. })));
     }
 
     #[test]
@@ -286,7 +295,11 @@ mod tests {
         let errors = result.unwrap_err();
         assert!(errors.iter().any(|e| matches!(
             e,
-            ValidationError::MissingDependencyTarget { phase_id: 1, missing_id: 99, .. }
+            ValidationError::MissingDependencyTarget {
+                phase_id: 1,
+                missing_id: 99,
+                ..
+            }
         )));
     }
 
@@ -301,10 +314,9 @@ mod tests {
         let result = validate_plan(&phases, &project);
         assert!(result.is_err());
         let errors = result.unwrap_err();
-        assert!(errors.iter().any(|e| matches!(
-            e,
-            ValidationError::OrphanedGoal { goal_index: 1, .. }
-        )));
+        assert!(errors
+            .iter()
+            .any(|e| matches!(e, ValidationError::OrphanedGoal { goal_index: 1, .. })));
     }
 
     #[test]
@@ -321,10 +333,9 @@ mod tests {
         let result = validate_plan(&phases, &project);
         assert!(result.is_err());
         let errors = result.unwrap_err();
-        assert!(errors.iter().any(|e| matches!(
-            e,
-            ValidationError::EmptyPhase { phase_id: 1, .. }
-        )));
+        assert!(errors
+            .iter()
+            .any(|e| matches!(e, ValidationError::EmptyPhase { phase_id: 1, .. })));
     }
 
     #[test]
@@ -410,7 +421,11 @@ mod tests {
         let warnings = result.unwrap();
         assert!(warnings.iter().any(|w| matches!(
             w,
-            PlanWarning::LargePhase { phase_id: 1, task_count: 6, .. }
+            PlanWarning::LargePhase {
+                phase_id: 1,
+                task_count: 6,
+                ..
+            }
         )));
     }
 
@@ -421,15 +436,21 @@ mod tests {
         let phases: Vec<PhaseSpec> = (1..=8u32)
             .map(|id| {
                 let deps = if id == 1 { vec![] } else { vec![id - 1] };
-                make_phase_with_tasks(id, &format!("P{}", id), deps, vec![make_task(vec![0])], vec![], vec![])
+                make_phase_with_tasks(
+                    id,
+                    &format!("P{}", id),
+                    deps,
+                    vec![make_task(vec![0])],
+                    vec![],
+                    vec![],
+                )
             })
             .collect();
         let result = validate_plan(&phases, &project);
         assert!(result.is_ok());
         let warnings = result.unwrap();
-        assert!(warnings.iter().any(|w| matches!(
-            w,
-            PlanWarning::LongCriticalPath { length: 8 }
-        )));
+        assert!(warnings
+            .iter()
+            .any(|w| matches!(w, PlanWarning::LongCriticalPath { length: 8 })));
     }
 }

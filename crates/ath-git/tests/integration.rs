@@ -57,9 +57,15 @@ fn git_layer_opens_existing_repo() {
 #[test]
 fn git_layer_auto_inits_new_repo() {
     let dir = TempDir::new().expect("create tempdir");
-    assert!(!dir.path().join(".git").exists(), ".git should not exist yet");
+    assert!(
+        !dir.path().join(".git").exists(),
+        ".git should not exist yet"
+    );
     let layer = GitLayer::new(dir.path().to_path_buf()).expect("auto-init repo");
-    assert!(dir.path().join(".git").exists(), ".git should exist after auto-init");
+    assert!(
+        dir.path().join(".git").exists(),
+        ".git should exist after auto-init"
+    );
     assert_eq!(layer.repo_path(), dir.path());
 }
 
@@ -184,12 +190,18 @@ fn commit_message_has_trailers() {
         message.starts_with("athena:"),
         "subject should start with 'athena:'"
     );
-    assert!(message.contains("Phase: test-phase"), "missing Phase trailer");
+    assert!(
+        message.contains("Phase: test-phase"),
+        "missing Phase trailer"
+    );
     assert!(
         message.contains("Agent: Anthropic/opus-4"),
         "missing Agent trailer"
     );
-    assert!(message.contains("Task-Id: task-001"), "missing Task-Id trailer");
+    assert!(
+        message.contains("Task-Id: task-001"),
+        "missing Task-Id trailer"
+    );
     assert!(
         message.contains("Files-Count: 1"),
         "missing Files-Count trailer"
@@ -271,10 +283,7 @@ fn empty_diff_skips_commit() {
         .stage_and_commit(&[dir.path().join("file.txt")], &sample_meta())
         .expect("second stage_and_commit");
 
-    assert!(
-        !second.committed,
-        "should skip commit when diff is empty"
-    );
+    assert!(!second.committed, "should skip commit when diff is empty");
     assert!(second.oid.is_none(), "no OID for skipped commit");
 }
 
@@ -282,10 +291,7 @@ fn empty_diff_skips_commit() {
 fn missing_file_returns_error() {
     let (dir, layer) = create_temp_repo();
 
-    let result = layer.stage_and_commit(
-        &[dir.path().join("nonexistent.txt")],
-        &sample_meta(),
-    );
+    let result = layer.stage_and_commit(&[dir.path().join("nonexistent.txt")], &sample_meta());
 
     assert!(result.is_err(), "should error on missing file");
     let err = result.unwrap_err();
@@ -419,10 +425,7 @@ fn dirty_tree_with_untracked_file_rejects() {
     // Make an initial commit with a tracked file
     write_file(dir.path(), "tracked.txt", "tracked");
     layer
-        .stage_and_commit(
-            &[dir.path().join("tracked.txt")],
-            &sample_meta(),
-        )
+        .stage_and_commit(&[dir.path().join("tracked.txt")], &sample_meta())
         .expect("initial commit");
 
     // Write an untracked file (this makes the tree dirty)
@@ -486,15 +489,15 @@ fn conflict_detection_blocks_commit() {
     // We build the tree directly without touching the working dir to avoid
     // "uncommitted changes would be overwritten by merge" errors.
     {
-        let feature_ref = repo.find_branch("feature", git2::BranchType::Local).unwrap();
+        let feature_ref = repo
+            .find_branch("feature", git2::BranchType::Local)
+            .unwrap();
         let feature_commit = feature_ref.get().peel_to_commit().unwrap();
 
         // Build a tree with "feature change" content for conflict.txt
         let blob_oid = repo.blob(b"feature change").unwrap();
         let mut builder = repo.treebuilder(None).unwrap();
-        builder
-            .insert("conflict.txt", blob_oid, 0o100644)
-            .unwrap();
+        builder.insert("conflict.txt", blob_oid, 0o100644).unwrap();
         let tree_oid = builder.write().unwrap();
         let tree = repo.find_tree(tree_oid).unwrap();
 
@@ -518,9 +521,7 @@ fn conflict_detection_blocks_commit() {
             .get()
             .peel_to_commit()
             .unwrap();
-        let annotated = repo
-            .find_annotated_commit(feature_commit.id())
-            .unwrap();
+        let annotated = repo.find_annotated_commit(feature_commit.id()).unwrap();
 
         // Perform merge (this writes conflict markers to the index)
         repo.merge(&[&annotated], None, None).unwrap();
@@ -531,10 +532,7 @@ fn conflict_detection_blocks_commit() {
 
     // Now stage_and_commit should detect the conflict
     write_file(dir.path(), "other.txt", "other");
-    let result = layer.stage_and_commit(
-        &[dir.path().join("other.txt")],
-        &sample_meta(),
-    );
+    let result = layer.stage_and_commit(&[dir.path().join("other.txt")], &sample_meta());
 
     assert!(result.is_err(), "should error on merge conflict");
     let err = result.unwrap_err();
@@ -570,13 +568,7 @@ fn full_phase_commit_workflow() {
         reason: "All checks passed".to_string(),
         suggestions: vec![],
     };
-    let meta = CommitMetadata::from_phase_data(
-        "foundation",
-        &agent,
-        "task-42",
-        3,
-        Some(&verdict),
-    );
+    let meta = CommitMetadata::from_phase_data("foundation", &agent, "task-42", 3, Some(&verdict));
 
     // Stage and commit
     let result = layer
@@ -607,8 +599,14 @@ fn full_phase_commit_workflow() {
     assert!(message.contains("Agent: Anthropic/opus-4"), "Agent trailer");
     assert!(message.contains("Task-Id: task-42"), "Task-Id trailer");
     assert!(message.contains("Files-Count: 3"), "Files-Count trailer");
-    assert!(message.contains("Review-Status: passed"), "Review-Status trailer");
-    assert!(message.contains("Reviewer: Google/2.5-pro"), "Reviewer trailer");
+    assert!(
+        message.contains("Review-Status: passed"),
+        "Review-Status trailer"
+    );
+    assert!(
+        message.contains("Reviewer: Google/2.5-pro"),
+        "Reviewer trailer"
+    );
 
     // Walk commit tree: exactly 3 files present
     let tree = commit.tree().unwrap();

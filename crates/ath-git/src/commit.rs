@@ -36,8 +36,16 @@ impl CommitMetadata {
     ) -> Self {
         let (review_status, reviewer) = match review {
             Some(v) => (
-                Some(if v.passed { "passed".to_string() } else { "failed".to_string() }),
-                Some(format!("{}/{}", v.reviewer.provider_name(), v.reviewer.model())),
+                Some(if v.passed {
+                    "passed".to_string()
+                } else {
+                    "failed".to_string()
+                }),
+                Some(format!(
+                    "{}/{}",
+                    v.reviewer.provider_name(),
+                    v.reviewer.model()
+                )),
             ),
             None => (None, None),
         };
@@ -70,7 +78,10 @@ impl CommitMetadata {
 pub fn build_commit_message(meta: &CommitMetadata) -> String {
     let mut msg = format!("athena: {}\n\n", meta.phase_name);
     msg.push_str(&format!("Phase: {}\n", meta.phase_name));
-    msg.push_str(&format!("Agent: {}/{}\n", meta.agent_provider, meta.agent_model));
+    msg.push_str(&format!(
+        "Agent: {}/{}\n",
+        meta.agent_provider, meta.agent_model
+    ));
     msg.push_str(&format!("Task-Id: {}\n", meta.task_id));
     msg.push_str(&format!("Files-Count: {}\n", meta.files_count));
     if let Some(ref status) = meta.review_status {

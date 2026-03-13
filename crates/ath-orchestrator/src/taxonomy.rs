@@ -31,7 +31,13 @@ pub fn build_routing_table() -> HashMap<String, AgentKind> {
     }
 
     // Codex: code generation and scaffolding tasks
-    let codex_tags = ["codegen", "boilerplate", "scaffolding", "template", "generation"];
+    let codex_tags = [
+        "codegen",
+        "boilerplate",
+        "scaffolding",
+        "template",
+        "generation",
+    ];
     for tag in codex_tags {
         table.insert(tag.to_string(), AgentKind::Codex("o3".into()));
     }
@@ -86,7 +92,10 @@ mod tests {
     #[test]
     fn routing_table_architecture_maps_to_claude() {
         let table = build_routing_table();
-        assert!(matches!(table.get("architecture"), Some(AgentKind::Claude(_))));
+        assert!(matches!(
+            table.get("architecture"),
+            Some(AgentKind::Claude(_))
+        ));
     }
 
     #[test]
@@ -129,7 +138,10 @@ mod tests {
     #[test]
     fn routing_table_documentation_maps_to_gemini() {
         let table = build_routing_table();
-        assert!(matches!(table.get("documentation"), Some(AgentKind::Gemini(_))));
+        assert!(matches!(
+            table.get("documentation"),
+            Some(AgentKind::Gemini(_))
+        ));
     }
 
     #[test]
@@ -148,13 +160,19 @@ mod tests {
     #[test]
     fn routing_table_boilerplate_maps_to_codex() {
         let table = build_routing_table();
-        assert!(matches!(table.get("boilerplate"), Some(AgentKind::Codex(_))));
+        assert!(matches!(
+            table.get("boilerplate"),
+            Some(AgentKind::Codex(_))
+        ));
     }
 
     #[test]
     fn routing_table_scaffolding_maps_to_codex() {
         let table = build_routing_table();
-        assert!(matches!(table.get("scaffolding"), Some(AgentKind::Codex(_))));
+        assert!(matches!(
+            table.get("scaffolding"),
+            Some(AgentKind::Codex(_))
+        ));
     }
 
     #[test]

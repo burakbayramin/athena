@@ -61,23 +61,22 @@ impl GitLayer {
     pub fn is_dirty(&self) -> Result<bool, GitError> {
         let repo = self.repo.lock().map_err(|_| GitError::LockPoisoned)?;
 
-        if repo
-            .is_empty()
-            .map_err(|e| GitError::RepositoryOpen {
-                path: self.repo_path.clone(),
-                source: e,
-            })?
-        {
+        if repo.is_empty().map_err(|e| GitError::RepositoryOpen {
+            path: self.repo_path.clone(),
+            source: e,
+        })? {
             return Ok(false);
         }
 
         let mut opts = git2::StatusOptions::new();
         opts.include_untracked(true).include_ignored(false);
 
-        let statuses = repo.statuses(Some(&mut opts)).map_err(|e| GitError::RepositoryOpen {
-            path: self.repo_path.clone(),
-            source: e,
-        })?;
+        let statuses = repo
+            .statuses(Some(&mut opts))
+            .map_err(|e| GitError::RepositoryOpen {
+                path: self.repo_path.clone(),
+                source: e,
+            })?;
 
         Ok(!statuses.is_empty())
     }
@@ -149,27 +148,27 @@ impl GitLayer {
         })?;
 
         for file in files {
-            let relative = file
-                .strip_prefix(&self.repo_path)
-                .unwrap_or(file);
+            let relative = file.strip_prefix(&self.repo_path).unwrap_or(file);
 
             let abs_path = self.repo_path.join(relative);
             if abs_path.exists() {
-                index.add_path(relative).map_err(|e| GitError::StagingFailed {
-                    path: file.clone(),
-                    source: e,
-                })?;
-            } else {
-                // File doesn't exist on disk -- check if it's tracked in the index.
-                // If tracked, remove it (deletion). If not tracked, error.
-                let is_tracked = index
-                    .get_path(relative, 0)
-                    .is_some();
-                if is_tracked {
-                    index.remove_path(relative).map_err(|e| GitError::StagingFailed {
+                index
+                    .add_path(relative)
+                    .map_err(|e| GitError::StagingFailed {
                         path: file.clone(),
                         source: e,
                     })?;
+            } else {
+                // File doesn't exist on disk -- check if it's tracked in the index.
+                // If tracked, remove it (deletion). If not tracked, error.
+                let is_tracked = index.get_path(relative, 0).is_some();
+                if is_tracked {
+                    index
+                        .remove_path(relative)
+                        .map_err(|e| GitError::StagingFailed {
+                            path: file.clone(),
+                            source: e,
+                        })?;
                 } else {
                     return Err(GitError::FileMissing {
                         path: file.clone(),
@@ -212,7 +211,9 @@ impl GitLayer {
             }
         }
 
-        let tree = repo.find_tree(tree_oid).map_err(|e| GitError::CommitFailed { source: e })?;
+        let tree = repo
+            .find_tree(tree_oid)
+            .map_err(|e| GitError::CommitFailed { source: e })?;
 
         // Build signatures
         let author = git2::Signature::now("Athena", "athena@noreply")
@@ -375,7 +376,10 @@ mod tests {
 
         assert!(tree.get_name("a.txt").is_some(), "a.txt should be in tree");
         assert!(tree.get_name("b.txt").is_some(), "b.txt should be in tree");
-        assert!(tree.get_name("c.txt").is_none(), "c.txt should NOT be in tree");
+        assert!(
+            tree.get_name("c.txt").is_none(),
+            "c.txt should NOT be in tree"
+        );
     }
 
     #[test]
@@ -394,14 +398,26 @@ mod tests {
         let commit = repo.find_commit(result.oid.unwrap()).unwrap();
         let message = commit.message().unwrap();
 
-        assert!(message.starts_with("athena:"), "subject should start with athena:");
-        assert!(message.contains("Phase: test-phase"), "should have Phase trailer");
+        assert!(
+            message.starts_with("athena:"),
+            "subject should start with athena:"
+        );
+        assert!(
+            message.contains("Phase: test-phase"),
+            "should have Phase trailer"
+        );
         assert!(
             message.contains("Agent: Anthropic/opus-4"),
             "should have Agent trailer"
         );
-        assert!(message.contains("Task-Id: task-001"), "should have Task-Id trailer");
-        assert!(message.contains("Files-Count: 1"), "should have Files-Count trailer");
+        assert!(
+            message.contains("Task-Id: task-001"),
+            "should have Task-Id trailer"
+        );
+        assert!(
+            message.contains("Files-Count: 1"),
+            "should have Files-Count trailer"
+        );
     }
 
     #[test]
@@ -421,7 +437,10 @@ mod tests {
         // HEAD should now exist
         let repo = layer.repo_handle();
         let repo = repo.lock().unwrap();
-        assert!(repo.head().is_ok(), "HEAD should exist after initial commit");
+        assert!(
+            repo.head().is_ok(),
+            "HEAD should exist after initial commit"
+        );
     }
 
     #[test]
@@ -487,10 +506,7 @@ mod tests {
         let dir = tempfile::tempdir().expect("create tempdir");
         let layer = GitLayer::new(dir.path().to_path_buf()).expect("init");
 
-        let result = layer.stage_and_commit(
-            &[dir.path().join("nonexistent.txt")],
-            &sample_meta(),
-        );
+        let result = layer.stage_and_commit(&[dir.path().join("nonexistent.txt")], &sample_meta());
 
         assert!(result.is_err());
         let err = result.unwrap_err();
