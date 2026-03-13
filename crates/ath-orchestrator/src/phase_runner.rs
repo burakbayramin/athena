@@ -19,7 +19,10 @@ use ath_types::review::ReviewVerdict;
 use serde::{Deserialize, Serialize};
 
 use crate::error::PhaseRunnerError;
-use crate::progress::{emit_progress, ProgressEvent, SharedProgressObserver};
+use crate::progress::{
+    emit_progress, wants_transcripts, ProgressEvent, SharedProgressObserver, Transcript,
+    TranscriptKind,
+};
 use crate::review;
 
 // ---------------------------------------------------------------------------
@@ -470,7 +473,7 @@ pub async fn execute_phase_tasks(
     registry: &AgentRegistry,
     feedback: Option<&ReviewVerdict>,
 ) -> Result<Vec<TaskOutput>, PhaseRunnerError> {
-    execute_phase_tasks_with_progress(phase, registry, feedback, None).await
+    execute_phase_tasks_with_progress(phase, registry, feedback, 1, None).await
 }
 
 /// Dispatches each task in a phase to its assigned agent sequentially and emits
@@ -479,6 +482,7 @@ pub async fn execute_phase_tasks_with_progress(
     phase: &PhaseSpec,
     registry: &AgentRegistry,
     feedback: Option<&ReviewVerdict>,
+    attempt_number: u32,
     observer: Option<SharedProgressObserver>,
 ) -> Result<Vec<TaskOutput>, PhaseRunnerError> {
     let mut outputs = Vec::with_capacity(phase.tasks.len());
@@ -523,7 +527,7 @@ pub async fn execute_phase_tasks_with_progress(
         let request = AgentRequest {
             id: uuid::Uuid::new_v4(),
             agent: agent.clone(),
-            prompt,
+            prompt: prompt.clone(),
             context: None,
             json_schema: Some(task_output_schema()),
             created_at: chrono::Utc::now(),
@@ -555,6 +559,23 @@ pub async fn execute_phase_tasks_with_progress(
         task_output.agent = agent.clone();
         task_output.input_tokens = response.input_tokens;
         task_output.output_tokens = response.output_tokens;
+
+        if wants_transcripts(observer.as_ref()) {
+            emit_progress(
+                observer.as_ref(),
+                ProgressEvent::Transcript(Transcript {
+                    kind: TranscriptKind::Executor,
+                    phase_id: phase.id,
+                    phase_name: phase.name.clone(),
+                    label: task.name.clone(),
+                    attempt_number,
+                    agent: agent.clone(),
+                    prompt: prompt.clone(),
+                    response: response.content.clone(),
+                    retry_feedback: feedback.map(review::format_retry_feedback_context),
+                }),
+            );
+        }
 
         emit_progress(
             observer.as_ref(),
@@ -639,10 +660,34 @@ pub async fn run_phase_with_progress(
     let _running = state.start();
 
     for attempt in 1u32..=3 {
+        if let Some(feedback) = last_feedback.as_ref() {
+            if wants_transcripts(observer.as_ref()) {
+                emit_progress(
+                    observer.as_ref(),
+                    ProgressEvent::Transcript(Transcript {
+                        kind: TranscriptKind::RetryFeedback,
+                        phase_id: phase.id,
+                        phase_name: phase.name.clone(),
+                        label: phase.name.clone(),
+                        attempt_number: attempt,
+                        agent: feedback.reviewer.clone(),
+                        prompt: "Retry feedback".into(),
+                        response: review::format_retry_feedback_context(feedback),
+                        retry_feedback: None,
+                    }),
+                );
+            }
+        }
+
         // Execute all tasks
-        let outputs =
-            execute_phase_tasks_with_progress(phase, registry, last_feedback.as_ref(), observer.clone())
-                .await?;
+        let outputs = execute_phase_tasks_with_progress(
+            phase,
+            registry,
+            last_feedback.as_ref(),
+            attempt,
+            observer.clone(),
+        )
+        .await?;
 
         // Track contributions from this attempt
         for output in &outputs {
@@ -684,7 +729,7 @@ pub async fn run_phase_with_progress(
         let review_request = AgentRequest {
             id: uuid::Uuid::new_v4(),
             agent: reviewer.clone(),
-            prompt: review_prompt,
+            prompt: review_prompt.clone(),
             context: None,
             json_schema: Some(review::review_verdict_schema()),
             created_at: chrono::Utc::now(),
@@ -712,6 +757,25 @@ pub async fn run_phase_with_progress(
                 reviewer: format!("{:?}", reviewer),
                 reason: e.to_string(),
             })?;
+
+        if wants_transcripts(observer.as_ref()) {
+            emit_progress(
+                observer.as_ref(),
+                ProgressEvent::Transcript(Transcript {
+                    kind: TranscriptKind::Reviewer,
+                    phase_id: phase.id,
+                    phase_name: phase.name.clone(),
+                    label: phase.name.clone(),
+                    attempt_number: attempt,
+                    agent: reviewer.clone(),
+                    prompt: review_prompt.clone(),
+                    response: review_response.content.clone(),
+                    retry_feedback: last_feedback
+                        .as_ref()
+                        .map(review::format_retry_feedback_context),
+                }),
+            );
+        }
 
         review_attempts.push(ReviewAttempt {
             attempt_number: attempt,

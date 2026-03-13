@@ -65,11 +65,38 @@ pub enum ProgressEvent {
         phase_index: usize,
         total_phases: usize,
     },
+    Transcript(Transcript),
+}
+
+/// Transcript capture categories layered onto the same progress seam.
+#[derive(Debug, Clone, PartialEq)]
+pub enum TranscriptKind {
+    Executor,
+    Reviewer,
+    RetryFeedback,
+}
+
+/// Prompt/response transcript payload for verbose mode.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Transcript {
+    pub kind: TranscriptKind,
+    pub phase_id: u32,
+    pub phase_name: String,
+    pub label: String,
+    pub attempt_number: u32,
+    pub agent: AgentKind,
+    pub prompt: String,
+    pub response: String,
+    pub retry_feedback: Option<String>,
 }
 
 /// Shared observer contract for progress event sinks.
 pub trait ProgressObserver: Send + Sync {
     fn on_event(&self, event: ProgressEvent);
+
+    fn captures_transcripts(&self) -> bool {
+        false
+    }
 }
 
 /// Shared observer handle passed through the execution engine.
@@ -80,6 +107,11 @@ pub fn emit_progress(observer: Option<&SharedProgressObserver>, event: ProgressE
     if let Some(observer) = observer {
         observer.on_event(event);
     }
+}
+
+/// Returns true when the attached observer requested transcript payloads.
+pub fn wants_transcripts(observer: Option<&SharedProgressObserver>) -> bool {
+    observer.is_some_and(|observer| observer.captures_transcripts())
 }
 
 #[cfg(test)]
@@ -425,5 +457,232 @@ mod tests {
                 .any(|event| matches!(event, ProgressEvent::PhaseCompleted { .. })),
             "phase completed event should be emitted"
         );
+    }
+}
+
+#[cfg(test)]
+mod verbose {
+    use super::*;
+    use crate::error::PhaseRunnerError;
+    use crate::phase_runner::{run_phase_with_progress, AgentRegistry, FileOutput};
+    use ath_agents::MockBackend;
+    use ath_types::agent::AgentResponse;
+    use ath_types::plan::{PhaseSpec, TaskSpec};
+    use ath_types::project::SkillTag;
+    use chrono::Utc;
+    use std::sync::{Arc, Mutex};
+
+    #[derive(Default)]
+    struct TranscriptObserver {
+        transcripts: Mutex<Vec<Transcript>>,
+    }
+
+    impl TranscriptObserver {
+        fn transcripts(&self) -> Vec<Transcript> {
+            self.transcripts.lock().unwrap().clone()
+        }
+    }
+
+    impl ProgressObserver for TranscriptObserver {
+        fn on_event(&self, event: ProgressEvent) {
+            if let ProgressEvent::Transcript(transcript) = event {
+                self.transcripts.lock().unwrap().push(transcript);
+            }
+        }
+
+        fn captures_transcripts(&self) -> bool {
+            true
+        }
+    }
+
+    fn make_task_spec(name: &str, agent: Option<AgentKind>) -> TaskSpec {
+        TaskSpec {
+            name: name.into(),
+            description: format!("Implement {name}"),
+            skill_tags: vec![SkillTag("rust".into())],
+            expected_output_files: vec![],
+            acceptance_criteria: vec![],
+            goal_indices: vec![],
+            assigned_agent: agent,
+        }
+    }
+
+    fn make_phase(id: u32, name: &str, tasks: Vec<TaskSpec>) -> PhaseSpec {
+        PhaseSpec {
+            id,
+            name: name.into(),
+            description: format!("{name} description"),
+            tasks,
+            depends_on: vec![],
+            produces: vec![],
+            consumes: vec![],
+        }
+    }
+
+    fn make_task_output_json(task_name: &str, agent: &AgentKind, file_path: &str) -> String {
+        let agent_json = serde_json::to_string(agent).unwrap();
+        format!(
+            r#"{{"task_name":"{}","agent":{},"files_produced":[{{"path":"{}","content":"fn main() {{}}"}}],"explanation":"Done","issues_encountered":[],"input_tokens":100,"output_tokens":50}}"#,
+            task_name, agent_json, file_path
+        )
+    }
+
+    fn mock_response(content: &str, agent: &AgentKind) -> AgentResponse {
+        AgentResponse {
+            request_id: uuid::Uuid::new_v4(),
+            agent: agent.clone(),
+            content: content.to_string(),
+            input_tokens: 100,
+            output_tokens: 50,
+            created_at: Utc::now(),
+        }
+    }
+
+    fn passing_verdict_json() -> String {
+        r#"{"passed":true,"severity":"info","reason":"All good","suggestions":[]}"#.into()
+    }
+
+    fn failing_verdict_json(reason: &str) -> String {
+        format!(
+            r#"{{"passed":false,"severity":"critical","reason":"{}","suggestions":[]}}"#,
+            reason
+        )
+    }
+
+    mod tests {
+        use super::*;
+
+        #[tokio::test]
+        async fn task_execution_emits_transcript_payloads_when_enabled() {
+            let claude = AgentKind::Claude("opus-4".into());
+            let gemini = AgentKind::Gemini("2.5-pro".into());
+            let phase =
+                make_phase(1, "phase-1", vec![make_task_spec("task-1", Some(claude.clone()))]);
+
+            let task_mock = Arc::new(MockBackend::new(vec![Ok(mock_response(
+                &make_task_output_json("task-1", &claude, "src/main.rs"),
+                &claude,
+            ))]));
+            let reviewer_mock = Arc::new(MockBackend::always_ok(&passing_verdict_json()));
+
+            let mut registry = AgentRegistry::new();
+            registry.register(claude.clone(), task_mock);
+            registry.register(gemini.clone(), reviewer_mock);
+
+            let observer = Arc::new(TranscriptObserver::default());
+            let progress: SharedProgressObserver = observer.clone();
+            let write_files = |_: &[FileOutput]| -> Result<(), PhaseRunnerError> { Ok(()) };
+
+            run_phase_with_progress(&phase, &registry, |_| true, write_files, None, Some(progress))
+                .await
+                .expect("phase executes");
+
+            let transcripts = observer.transcripts();
+            assert!(transcripts.iter().any(|transcript| {
+                transcript.kind == TranscriptKind::Executor
+                    && transcript.label == "task-1"
+                    && transcript.prompt.contains("Implement task-1")
+            }));
+        }
+
+        #[tokio::test]
+        async fn review_dispatch_emits_reviewer_prompt_and_verdict_transcript() {
+            let claude = AgentKind::Claude("opus-4".into());
+            let gemini = AgentKind::Gemini("2.5-pro".into());
+            let phase =
+                make_phase(1, "phase-1", vec![make_task_spec("task-1", Some(claude.clone()))]);
+
+            let task_mock = Arc::new(MockBackend::new(vec![Ok(mock_response(
+                &make_task_output_json("task-1", &claude, "src/main.rs"),
+                &claude,
+            ))]));
+            let reviewer_mock = Arc::new(MockBackend::always_ok(&passing_verdict_json()));
+
+            let mut registry = AgentRegistry::new();
+            registry.register(claude.clone(), task_mock);
+            registry.register(gemini.clone(), reviewer_mock);
+
+            let observer = Arc::new(TranscriptObserver::default());
+            let progress: SharedProgressObserver = observer.clone();
+            let write_files = |_: &[FileOutput]| -> Result<(), PhaseRunnerError> { Ok(()) };
+
+            run_phase_with_progress(&phase, &registry, |_| true, write_files, None, Some(progress))
+                .await
+                .expect("phase executes");
+
+            let transcripts = observer.transcripts();
+            assert!(transcripts.iter().any(|transcript| {
+                transcript.kind == TranscriptKind::Reviewer
+                    && transcript.prompt.contains("## Phase Review: phase-1")
+                    && transcript.response.contains("\"passed\":true")
+            }));
+        }
+
+        #[tokio::test]
+        async fn retry_feedback_is_exposed_as_transcript_context_for_next_attempt() {
+            let claude = AgentKind::Claude("opus-4".into());
+            let gemini = AgentKind::Gemini("2.5-pro".into());
+            let phase =
+                make_phase(1, "phase-1", vec![make_task_spec("task-1", Some(claude.clone()))]);
+
+            let task_mock = Arc::new(MockBackend::new(vec![
+                Ok(mock_response(
+                    &make_task_output_json("task-1", &claude, "src/main.rs"),
+                    &claude,
+                )),
+                Ok(mock_response(
+                    &make_task_output_json("task-1", &claude, "src/main.rs"),
+                    &claude,
+                )),
+            ]));
+            let reviewer_mock = Arc::new(MockBackend::new(vec![
+                Ok(mock_response(&failing_verdict_json("needs work"), &gemini)),
+                Ok(mock_response(&passing_verdict_json(), &gemini)),
+            ]));
+
+            let mut registry = AgentRegistry::new();
+            registry.register(claude.clone(), task_mock);
+            registry.register(gemini.clone(), reviewer_mock);
+
+            let observer = Arc::new(TranscriptObserver::default());
+            let progress: SharedProgressObserver = observer.clone();
+            let write_files = |_: &[FileOutput]| -> Result<(), PhaseRunnerError> { Ok(()) };
+
+            run_phase_with_progress(&phase, &registry, |_| true, write_files, None, Some(progress))
+                .await
+                .expect("phase executes");
+
+            let transcripts = observer.transcripts();
+            assert!(transcripts.iter().any(|transcript| {
+                transcript.kind == TranscriptKind::RetryFeedback
+                    && transcript.response.contains("needs work")
+            }));
+        }
+
+        #[tokio::test]
+        async fn normal_mode_runs_without_transcript_capture_enabled() {
+            let claude = AgentKind::Claude("opus-4".into());
+            let gemini = AgentKind::Gemini("2.5-pro".into());
+            let phase =
+                make_phase(1, "phase-1", vec![make_task_spec("task-1", Some(claude.clone()))]);
+
+            let task_mock = Arc::new(MockBackend::new(vec![Ok(mock_response(
+                &make_task_output_json("task-1", &claude, "src/main.rs"),
+                &claude,
+            ))]));
+            let reviewer_mock = Arc::new(MockBackend::always_ok(&passing_verdict_json()));
+
+            let mut registry = AgentRegistry::new();
+            registry.register(claude.clone(), task_mock);
+            registry.register(gemini.clone(), reviewer_mock);
+
+            let write_files = |_: &[FileOutput]| -> Result<(), PhaseRunnerError> { Ok(()) };
+
+            let record =
+                run_phase_with_progress(&phase, &registry, |_| true, write_files, None, None)
+                    .await
+                    .expect("phase executes");
+            assert_eq!(record.review_attempts.len(), 1);
+        }
     }
 }

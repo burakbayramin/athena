@@ -226,16 +226,23 @@ pub fn build_retry_prompt(task: &TaskSpec, feedback: &ReviewVerdict) -> String {
         task.name, task.description
     );
 
-    prompt.push_str("\n## Previous Review Feedback\n");
+    prompt.push_str(&format_retry_feedback_context(feedback));
+
+    prompt.push_str("\nPlease address the feedback above and produce corrected output.\n");
+    prompt
+}
+
+/// Formats the retry feedback section reused by retry prompts and verbose transcript capture.
+pub fn format_retry_feedback_context(feedback: &ReviewVerdict) -> String {
+    let mut section = "\n## Previous Review Feedback\n".to_string();
 
     let severity_str = match feedback.severity {
         Severity::Critical => "Critical",
         Severity::Warning => "Warning",
         Severity::Info => "Info",
     };
-    prompt.push_str(&format!("**Result:** FAILED ({severity_str})\n"));
+    section.push_str(&format!("**Result:** FAILED ({severity_str})\n"));
 
-    // Truncate reason to 500 chars
     let reason = if feedback.reason.len() > 500 {
         let mut truncated = feedback.reason[..500].to_string();
         truncated.push_str("...");
@@ -243,23 +250,27 @@ pub fn build_retry_prompt(task: &TaskSpec, feedback: &ReviewVerdict) -> String {
     } else {
         feedback.reason.clone()
     };
-    prompt.push_str(&format!("**Reason:** {reason}\n"));
+    section.push_str(&format!("**Reason:** {reason}\n"));
 
-    // Max 5 suggestions
     let suggestions: Vec<&CodeSuggestion> = feedback.suggestions.iter().take(5).collect();
     if !suggestions.is_empty() {
-        prompt.push_str("\n**Suggestions:**\n");
-        for s in suggestions {
-            if let Some(line) = s.line {
-                prompt.push_str(&format!("- `{}` line {}: {}\n", s.file, line, s.suggestion));
+        section.push_str("\n**Suggestions:**\n");
+        for suggestion in suggestions {
+            if let Some(line) = suggestion.line {
+                section.push_str(&format!(
+                    "- `{}` line {}: {}\n",
+                    suggestion.file, line, suggestion.suggestion
+                ));
             } else {
-                prompt.push_str(&format!("- `{}`: {}\n", s.file, s.suggestion));
+                section.push_str(&format!(
+                    "- `{}`: {}\n",
+                    suggestion.file, suggestion.suggestion
+                ));
             }
         }
     }
 
-    prompt.push_str("\nPlease address the feedback above and produce corrected output.\n");
-    prompt
+    section
 }
 
 /// Returns the priority index for an agent (lower = higher priority).
