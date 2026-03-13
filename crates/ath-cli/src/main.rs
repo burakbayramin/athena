@@ -3,6 +3,7 @@
 //! CLI entry point for the Athena multi-agent orchestrator.
 
 mod init;
+mod progress;
 mod report;
 mod run;
 

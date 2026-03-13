@@ -15,4 +15,10 @@ ath-types = { path = "../ath-types" }
 ath-config = { path = "../ath-config" }
 ath-agents = { path = "../ath-agents" }
 ath-planner.workspace = true
+ath-orchestrator.workspace = true
+ath-git.workspace = true
+indicatif.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+tracing-indicatif.workspace = true
 tokio = { workspace = true, features = ["rt-multi-thread", "macros"] }
