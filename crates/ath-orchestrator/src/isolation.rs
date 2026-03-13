@@ -4,11 +4,25 @@
 //! file ownership before any agent is dispatched.
 //! Post-execution: compares actual output files against declared expectations.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
-use ath_types::plan::{ExecutionPlan, PhaseSpec, TaskSpec};
+use ath_types::plan::{ExecutionPlan, TaskSpec};
 
 use crate::error::IsolationError;
+
+/// A warning produced by post-execution audit when actual output files
+/// differ from declared expectations.
+///
+/// Warnings are informational -- they do not block execution.
+#[derive(Debug, Clone, PartialEq)]
+pub struct AuditWarning {
+    /// The task that produced the discrepancy.
+    pub task_name: String,
+    /// Files produced by the task but not declared in expected_output_files.
+    pub unexpected_files: Vec<String>,
+    /// Files declared in expected_output_files but not actually produced.
+    pub missing_files: Vec<String>,
+}
 
 /// Validates that no two phases within the same parallel group claim the same output file.
 ///
@@ -53,6 +67,37 @@ pub fn check_isolation(plan: &ExecutionPlan) -> Result<(), IsolationError> {
     }
 
     Ok(())
+}
+
+/// Compares actual output files against a task's declared expected_output_files.
+///
+/// Returns a list of warnings (empty if everything matches). Warnings are
+/// informational only -- they do not block execution.
+pub fn audit_outputs(task: &TaskSpec, actual_files: &[String]) -> Vec<AuditWarning> {
+    let expected: HashSet<&str> = task.expected_output_files.iter().map(|s| s.as_str()).collect();
+    let actual: HashSet<&str> = actual_files.iter().map(|s| s.as_str()).collect();
+
+    let mut unexpected: Vec<String> = actual
+        .difference(&expected)
+        .map(|s| s.to_string())
+        .collect();
+    unexpected.sort();
+
+    let mut missing: Vec<String> = expected
+        .difference(&actual)
+        .map(|s| s.to_string())
+        .collect();
+    missing.sort();
+
+    if unexpected.is_empty() && missing.is_empty() {
+        return Vec::new();
+    }
+
+    vec![AuditWarning {
+        task_name: task.name.clone(),
+        unexpected_files: unexpected,
+        missing_files: missing,
+    }]
 }
 
 #[cfg(test)]
@@ -214,5 +259,57 @@ mod tests {
     fn check_isolation_empty_parallel_groups_ok() {
         let plan = make_plan(vec![], vec![]);
         assert!(check_isolation(&plan).is_ok());
+    }
+
+    // --- audit_outputs tests ---
+
+    #[test]
+    fn audit_matching_files_returns_empty() {
+        let task = make_task("T1", &["src/a.rs", "src/b.rs"]);
+        let actual = vec!["src/a.rs".into(), "src/b.rs".into()];
+        let warnings = audit_outputs(&task, &actual);
+        assert!(warnings.is_empty());
+    }
+
+    #[test]
+    fn audit_unexpected_files_returns_warning() {
+        let task = make_task("T1", &["src/a.rs"]);
+        let actual = vec!["src/a.rs".into(), "src/extra.rs".into()];
+        let warnings = audit_outputs(&task, &actual);
+        assert_eq!(warnings.len(), 1);
+        assert_eq!(warnings[0].task_name, "T1");
+        assert_eq!(warnings[0].unexpected_files, vec!["src/extra.rs"]);
+        assert!(warnings[0].missing_files.is_empty());
+    }
+
+    #[test]
+    fn audit_missing_files_returns_warning() {
+        let task = make_task("T1", &["src/a.rs", "src/b.rs"]);
+        let actual = vec!["src/a.rs".into()];
+        let warnings = audit_outputs(&task, &actual);
+        assert_eq!(warnings.len(), 1);
+        assert_eq!(warnings[0].task_name, "T1");
+        assert!(warnings[0].unexpected_files.is_empty());
+        assert_eq!(warnings[0].missing_files, vec!["src/b.rs"]);
+    }
+
+    #[test]
+    fn audit_both_unexpected_and_missing_returns_warning() {
+        let task = make_task("T1", &["src/expected.rs"]);
+        let actual = vec!["src/surprise.rs".into()];
+        let warnings = audit_outputs(&task, &actual);
+        assert_eq!(warnings.len(), 1);
+        assert_eq!(warnings[0].task_name, "T1");
+        assert_eq!(warnings[0].unexpected_files, vec!["src/surprise.rs"]);
+        assert_eq!(warnings[0].missing_files, vec!["src/expected.rs"]);
+    }
+
+    #[test]
+    fn audit_warning_includes_task_name() {
+        let task = make_task("My Important Task", &["src/a.rs"]);
+        let actual: Vec<String> = vec![];
+        let warnings = audit_outputs(&task, &actual);
+        assert_eq!(warnings.len(), 1);
+        assert_eq!(warnings[0].task_name, "My Important Task");
     }
 }
