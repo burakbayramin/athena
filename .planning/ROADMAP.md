@@ -34,7 +34,7 @@ Decimal phases appear between their surrounding integers in numeric order.
   2. Providing an invalid or missing API key produces a typed error (not a panic) with a clear message identifying which key is missing
   3. The typed inter-agent schemas (AgentRequest, AgentResponse, ReviewVerdict, ProjectSpec) can be serialized and deserialized round-trip without data loss
   4. All internal modules import from the shared types crate — no duplicated type definitions exist in the project
-**Plans**: 4 plans
+**Plans**: 2 plans
 
 Plans:
 - [x] 01-01-PLAN.md — Cargo workspace scaffold, all 7 ath-* crate stubs, workspace-level dependency management
@@ -84,7 +84,7 @@ Plans:
   2. User can run `ath run --spec ./spec.md` and Athena parses the markdown file into the same ProjectSpec structure
   3. User can run `ath run --codebase ./my-project` and Athena analyzes the existing files and produces a ProjectSpec describing next-step goals
   4. All three input modes produce a ProjectSpec that passes serde deserialization — malformed LLM output is caught with an actionable error, not a panic
-**Plans**: 4 plans
+**Plans**: 2 plans
 
 Plans:
 - [ ] 04-01-PLAN.md — InputMode enum, InputError type, AgentRequest json_schema extension, CLI --spec and --codebase flags
@@ -135,7 +135,7 @@ Plans:
   3. After 3 failed review attempts, Athena halts phase execution and reports the final reviewer verdict — it does not enter a fourth retry or loop indefinitely
   4. Cross-agent review pairing is enforced — the author agent's output is never reviewed by the same agent that produced it
   5. A complete sequential run (all phases in order, each reviewed) completes successfully on a real project without manual intervention
-**Plans**: 4 plans
+**Plans**: 2 plans
 
 Plans:
 - [ ] 07-01-PLAN.md — PhaseRunnerError types, PhaseState typestate machine, TaskOutput/FileOutput structs, PhaseStatus enum
@@ -152,7 +152,7 @@ Plans:
   2. During execution, the terminal updates in real time showing: current phase name, active agent, task status (running/complete/failed)
   3. `ath run --dry-run` prints the full phase plan and exits without executing any LLM or git call
   4. `ath run --verbose` shows full agent prompt/response transcripts in addition to normal progress output
-**Plans**: 4 plans
+**Plans**: 2 plans
 
 Plans:
 - [x] 08-01: clap subcommand definitions — run, init, report with full argument surface
@@ -170,7 +170,7 @@ Plans:
   3. An API authentication error message names the provider and tells the user which env var or config key to check
   4. A review failure error message includes the phase name, which agent reviewed, which attempt failed, and the reviewer's verdict text
   5. A schema validation error identifies the field that failed deserialization and the raw value that was received
-**Plans**: 4 plans
+**Plans**: 2 plans
 
 Plans:
 - [x] 09-01: ReportWriter — JSON + Markdown report generation from run state
@@ -187,13 +187,11 @@ Plans:
   2. Running a project with two independent parallel phases completes faster than running the same project with those phases forced sequential
   3. When two parallel phases attempt to write to the same file, IsolationManager blocks the second dispatch before any LLM call — the conflict is reported, not silently skipped
   4. After parallel phases complete, all output files are committed to git with correct per-phase metadata — no interleaved or dropped commits
-**Plans**: 4 plans
+**Plans**: 2 plans
 
 Plans:
-- [ ] 10-01: Parallel dispatch enablement in AgentCoordinator — activate JoinSet fan-out for independent phases
-- [ ] 10-02: Cross-phase isolation enforcement — IsolationManager extended to concurrent phase boundaries
-- [ ] 10-03: Git commit sequencing — serialize concurrent phase commits to prevent race conditions
-- [ ] 10-04: Parallel execution integration test — verified faster-than-sequential on synthetic parallelizable project
+- [ ] 10-01-PLAN.md — Error variants, JoinSet parallel dispatch, isolation gate, and commit serialization in AgentCoordinator
+- [ ] 10-02-PLAN.md — Integration tests proving concurrent dispatch, faster-than-sequential timing, isolation enforcement, deterministic ordering
 
 ## Progress
 
@@ -211,4 +209,4 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7 -> 8 -> 9 -> 10
 | 7. Phase Runner and Review | 4/4 | Complete   | 2026-03-13 |
 | 8. CLI and Progress | 4/4 | Complete | 2026-03-13 |
 | 9. Reporting and Error Quality | 4/4 | Complete | 2026-03-13 |
-| 10. Parallel Execution | 0/4 | Not started | - |
+| 10. Parallel Execution | 0/2 | Not started | - |
