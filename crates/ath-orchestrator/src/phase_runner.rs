@@ -441,6 +441,12 @@ pub struct AgentRegistry {
     backends: HashMap<mem::Discriminant<AgentKind>, Arc<dyn AgentBackend>>,
 }
 
+impl Default for AgentRegistry {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl AgentRegistry {
     /// Create an empty registry.
     pub fn new() -> Self {
@@ -817,7 +823,7 @@ pub async fn run_phase_with_progress(
                 let metadata = ath_git::commit::CommitMetadata::from_phase_data(
                     &phase.name,
                     &reviewer,
-                    &format!("phase-{}", phase.id),
+                    format!("phase-{}", phase.id),
                     file_paths.len(),
                     Some(&verdict),
                 );

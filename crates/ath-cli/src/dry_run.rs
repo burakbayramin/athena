@@ -1,9 +1,8 @@
 use std::path::{Path, PathBuf};
 
 use anyhow::{anyhow, Result};
-use ath_planner::decompose::display::format_execution_plan;
 use ath_planner::decompose::display_execution_plan;
-use ath_types::plan::{ExecutionPlan, PhaseSpec, TaskSpec};
+use ath_types::plan::ExecutionPlan;
 
 const CACHE_DIR: &str = ".ath";
 const CACHE_FILE: &str = "last-plan.json";
@@ -35,7 +34,9 @@ pub(crate) fn load_plan_cache(project_dir: &Path) -> Result<ExecutionPlan> {
     serde_json::from_str(&raw).map_err(|e| anyhow!("{e}"))
 }
 
+#[cfg(test)]
 pub(crate) fn render_cached_plan(project_dir: &Path) -> Result<String> {
+    use ath_planner::decompose::display::format_execution_plan;
     let plan = load_plan_cache(project_dir)?;
     let mut out = String::new();
     format_execution_plan(&plan, &[], &mut out).map_err(|e| anyhow!("{e}"))?;
@@ -53,6 +54,7 @@ mod tests {
     use super::*;
     use crate::{run, GlobalArgs};
     use ath_types::agent::AgentKind;
+    use ath_types::plan::{PhaseSpec, TaskSpec};
     use ath_types::project::SkillTag;
     use std::sync::Mutex;
 

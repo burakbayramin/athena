@@ -13,7 +13,7 @@ use ath_orchestrator::taxonomy;
 use ath_planner::decompose::{decompose_project_spec, display_execution_plan};
 use ath_planner::input::{display_project_spec_summary, parse_input, resolve_input_mode};
 use ath_types::agent::AgentKind;
-use ath_types::plan::{ExecutionPlan, PhaseSpec, TaskSpec};
+use ath_types::plan::ExecutionPlan;
 use clap::Args;
 
 use crate::progress::TerminalProgressReporter;
@@ -219,6 +219,7 @@ fn print_provider_status(config: &ConfigStore) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use ath_types::plan::{PhaseSpec, TaskSpec};
     use ath_types::project::SkillTag;
 
     fn make_task(name: &str, skill_tags: &[&str], expected_files: &[&str]) -> TaskSpec {

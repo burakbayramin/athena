@@ -164,7 +164,7 @@ pub async fn parse_input(
                 scan_codebase(&scan_path)
             })
             .await
-            .map_err(|e| InputError::Io(std::io::Error::new(std::io::ErrorKind::Other, e)))??;
+            .map_err(|e| InputError::Io(std::io::Error::other(e)))??;
 
             parse_to_project_spec(backend, move |last_err| {
                 build_codebase_request(&tree, &key_files, intent.as_deref(), last_err)

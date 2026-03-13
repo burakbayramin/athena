@@ -98,7 +98,7 @@ pub fn scan_codebase(path: &Path) -> Result<(String, Vec<(String, String)>), Inp
         .git_global(true)
         .filter_entry(|entry| {
             // Skip known directories by name
-            if entry.file_type().map_or(false, |ft| ft.is_dir()) {
+            if entry.file_type().is_some_and(|ft| ft.is_dir()) {
                 if let Some(name) = entry.file_name().to_str() {
                     if SKIP_DIRS.contains(&name) {
                         return false;
@@ -134,7 +134,7 @@ pub fn scan_codebase(path: &Path) -> Result<(String, Vec<(String, String)>), Inp
             .file_name()
             .and_then(|n| n.to_str())
             .unwrap_or("");
-        let suffix = if entry.file_type().map_or(false, |ft| ft.is_dir()) {
+        let suffix = if entry.file_type().is_some_and(|ft| ft.is_dir()) {
             "/"
         } else {
             ""
@@ -142,8 +142,8 @@ pub fn scan_codebase(path: &Path) -> Result<(String, Vec<(String, String)>), Inp
         tree_lines.push(format!("{}{}{}", indent, name, suffix));
 
         // Check if this is a key file (only for regular files)
-        if entry.file_type().map_or(false, |ft| ft.is_file()) && is_key_file(rel_path) {
-            if total_key_bytes < MAX_TOTAL_KEY_FILE_SIZE {
+        if entry.file_type().is_some_and(|ft| ft.is_file()) && is_key_file(rel_path)
+            && total_key_bytes < MAX_TOTAL_KEY_FILE_SIZE {
                 if let Ok(content) = std::fs::read_to_string(entry_path) {
                     let rel_str = rel_path.to_string_lossy().replace('\\', "/");
                     let truncated = if content.len() > MAX_SINGLE_FILE_SIZE {
@@ -157,7 +157,6 @@ pub fn scan_codebase(path: &Path) -> Result<(String, Vec<(String, String)>), Inp
                     key_files.push((rel_str, truncated));
                 }
             }
-        }
     }
 
     let tree_string = tree_lines.join("\n");

@@ -120,11 +120,10 @@ fn find_cycle_path(phases: &[PhaseSpec]) -> Vec<u32> {
     ids.sort();
 
     for &id in &ids {
-        if color[&id] == Color::White {
-            if dfs(id, &dep_map, &mut color, &mut stack, &mut cycle) {
+        if color[&id] == Color::White
+            && dfs(id, &dep_map, &mut color, &mut stack, &mut cycle) {
                 return cycle;
             }
-        }
     }
 
     cycle

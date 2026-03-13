@@ -89,6 +89,7 @@ fn root_help_text() -> String {
     command.render_help().to_string()
 }
 
+#[cfg(test)]
 fn render_subcommand_help(name: &str) -> String {
     let mut command = Cli::command();
     let subcommand = command

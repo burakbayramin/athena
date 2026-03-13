@@ -100,7 +100,7 @@ impl TerminalProgressReporter {
         match &self.progress_bar {
             Some(progress_bar) => {
                 if self.emit_stdout {
-                    progress_bar.println(block.to_string());
+                    progress_bar.println(block);
                 }
             }
             None => {

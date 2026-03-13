@@ -6,7 +6,7 @@
 
 use std::collections::{HashMap, HashSet};
 
-use ath_types::plan::{ExecutionPlan, PhaseSpec, TaskSpec};
+use ath_types::plan::{ExecutionPlan, TaskSpec};
 
 use crate::error::IsolationError;
 
@@ -103,6 +103,7 @@ pub fn audit_outputs(task: &TaskSpec, actual_files: &[String]) -> Vec<AuditWarni
 #[cfg(test)]
 mod tests {
     use super::*;
+    use ath_types::plan::PhaseSpec;
     use ath_types::project::SkillTag;
 
     fn make_task(name: &str, files: &[&str]) -> TaskSpec {
