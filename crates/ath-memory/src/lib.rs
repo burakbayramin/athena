@@ -14,6 +14,7 @@
 //! - [`KeywordIndex`] — Inverted index for keyword fallback search
 //! - [`MemoryError`] — Error enum with actionable [`MemoryError::hint()`] messages
 
+pub mod config;
 pub mod error;
 pub mod extract;
 pub mod index;
@@ -25,6 +26,7 @@ pub mod types;
 pub mod uri;
 
 // Re-export primary types at crate root for convenience.
+pub use config::{GcConfig, MemoryConfig};
 pub use error::MemoryError;
 pub use index::{MemoryIndex, SearchResult};
 pub use keyword::{KeywordHit, KeywordIndex};

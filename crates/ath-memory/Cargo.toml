@@ -9,6 +9,7 @@ serde_json.workspace = true
 thiserror.workspace = true
 uuid.workspace = true
 chrono.workspace = true
+toml.workspace = true
 tracing.workspace = true
 async-trait.workspace = true
 ath-types = { path = "../ath-types" }

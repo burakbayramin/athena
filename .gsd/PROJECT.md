@@ -85,4 +85,4 @@ Durable run reports persisted at `.ath/runs/<run-id>/report.json` with cost esti
 | M002 | Memory Layer | 🔄 In Progress | — |
 
 ---
-*Last updated: 2026-03-14 — M002/S04 (Orchestrator Integration) complete*
+*Last updated: 2026-03-14 — M002/S05 (CLI & Config) complete*

@@ -13,6 +13,7 @@ anyhow.workspace = true
 colored.workspace = true
 serde_json.workspace = true
 chrono.workspace = true
+ath-memory = { path = "../ath-memory" }
 ath-types = { path = "../ath-types" }
 ath-config = { path = "../ath-config" }
 ath-agents = { path = "../ath-agents" }
@@ -28,3 +29,4 @@ tokio = { workspace = true, features = ["rt-multi-thread", "macros"] }
 [dev-dependencies]
 tempfile.workspace = true
 uuid.workspace = true
+filetime.workspace = true

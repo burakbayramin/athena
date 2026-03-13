@@ -61,7 +61,7 @@ This milestone is complete only when all are true:
 - [x] **S04: Orchestrator Integration (Observation + Injection)** `risk:high` `depends:[S01,S02,S03]`
   > After this: `run_phase` captures observations automatically, context injector reads memory and enriches agent prompts within token budget — proven by integration test where a phase run produces observations and a subsequent call gets injected context
 
-- [ ] **S05: CLI & Config** `risk:low` `depends:[S01,S02,S03]`
+- [x] **S05: CLI & Config** `risk:low` `depends:[S01,S02,S03]`
   > After this: `ath memory tree|search|read|add|stats|gc` subcommands work, memory config is loaded from `.ath/memory/config.toml` — proven by CLI integration tests
 
 - [ ] **S06: End-to-End Integration** `risk:medium` `depends:[S04,S05]`

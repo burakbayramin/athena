@@ -5,6 +5,7 @@
 mod cost;
 mod dry_run;
 mod init;
+mod memory;
 mod progress;
 mod report;
 mod run;
@@ -13,6 +14,7 @@ mod verbose;
 use anyhow::Result;
 use ath_agents::AgentError;
 use ath_config::ConfigError;
+use ath_memory::MemoryError;
 use ath_orchestrator::error::PhaseRunnerError;
 use ath_types::ValidationError;
 use clap::{CommandFactory, Parser, Subcommand};
@@ -44,6 +46,8 @@ enum Commands {
     Run(run::RunArgs),
     Init(init::InitArgs),
     Report(report::ReportArgs),
+    /// Inspect and manage the Viking memory store.
+    Memory(memory::MemoryArgs),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -77,6 +81,7 @@ async fn dispatch(cli: Cli) -> Result<()> {
         Some(Commands::Run(args)) => run::run_command(args, global).await,
         Some(Commands::Init(args)) => init::init_command(args, global),
         Some(Commands::Report(args)) => report::report_command(args, global),
+        Some(Commands::Memory(args)) => memory::memory_command(args, global),
         None => {
             print!("{}", root_help_text());
             Ok(())
@@ -141,6 +146,10 @@ fn actionable_hint(err: &anyhow::Error) -> Option<String> {
 
     if let Some(validation_err) = find_cause::<ValidationError>(err) {
         return Some(validation_err.hint().to_string());
+    }
+
+    if let Some(memory_err) = find_cause::<MemoryError>(err) {
+        return Some(memory_err.hint().to_string());
     }
 
     None
@@ -297,6 +306,33 @@ mod error_display {
             let output = render_error_output(&err);
             assert!(output.contains("Could not determine config directory"));
             assert!(output.contains("HOME"));
+        }
+
+        #[test]
+        fn memory_error_shows_actionable_hint() {
+            let err = anyhow::Error::new(MemoryError::InvalidUri {
+                input: "bad://uri".into(),
+                reason: "wrong scheme".into(),
+            });
+            let output = render_error_output(&err);
+            assert!(output.contains("bad://uri"), "should show the invalid URI");
+            assert!(output.contains("Fix:"), "should show a fix hint");
+            assert!(
+                output.contains("viking://"),
+                "hint should mention the correct scheme"
+            );
+        }
+
+        #[test]
+        fn memory_io_error_shows_fix_hint() {
+            let err = anyhow::Error::new(MemoryError::IoError {
+                path: "/tmp/missing".into(),
+                message: "not found".into(),
+                source: std::io::Error::new(std::io::ErrorKind::NotFound, "gone"),
+            });
+            let output = render_error_output(&err);
+            assert!(output.contains("Fix:"));
+            assert!(output.contains(".ath/memory/"));
         }
     }
 }

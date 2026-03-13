@@ -8,7 +8,8 @@ use crate::uri::VikingUri;
 ///
 /// Defaults match the spec (§10): total=4000, project_identity=200,
 /// semantic_results=2500, agent_notes=300, recent_run=500.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Deserialize)]
+#[serde(default)]
 pub struct InjectionConfig {
     /// Maximum total tokens injected per agent call.
     pub total_budget: usize,

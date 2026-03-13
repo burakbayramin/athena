@@ -28,7 +28,8 @@ pub trait ExtractionLlm: Send + Sync {
 }
 
 /// Configuration for the extraction pipeline.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Deserialize)]
+#[serde(default)]
 pub struct ExtractionConfig {
     /// Maximum number of observations to include in a prompt.
     /// Excess observations are truncated (newest kept).
