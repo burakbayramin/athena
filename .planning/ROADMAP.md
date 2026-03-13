@@ -19,7 +19,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [ ] **Phase 5: Phase Decomposition** - ProjectAnalyzer + PhasePlanner producing validated dependency DAG
 - [ ] **Phase 6: Module Isolation** - IsolationManager with file ownership, agent routing, and skill taxonomy
 - [x] **Phase 7: Phase Runner and Review** - PhaseRunner state machine + ReviewEngine with cross-agent review gates (completed 2026-03-13)
-- [ ] **Phase 8: CLI and Progress** - clap shell, terminal progress reporting, and dry-run mode
+- [x] **Phase 8: CLI and Progress** - clap shell, terminal progress reporting, and dry-run mode (completed 2026-03-13)
 - [ ] **Phase 9: Reporting and Error Quality** - Structured final report, token cost tracking, actionable error messages
 - [ ] **Phase 10: Parallel Execution** - Parallel independent phase dispatch via tokio JoinSet
 
@@ -158,7 +158,7 @@ Plans:
 - [x] 08-01: clap subcommand definitions — run, init, report with full argument surface
 - [x] 08-02: Progress reporter — indicatif + tracing-indicatif integration for per-phase status display
 - [x] 08-03: Verbose mode — full agent transcript output behind --verbose flag
-- [ ] 08-04: Dry-run mode wiring — plan output path without execution (integrates Phase 5 dry-run)
+- [x] 08-04: Dry-run mode wiring — plan output path without execution (integrates Phase 5 dry-run)
 
 ### Phase 9: Reporting and Error Quality
 **Goal**: Athena produces a structured final report after every run, tracks token usage and estimated cost per phase per agent, and surfaces errors with enough context to act on them without reading source code
@@ -209,6 +209,6 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7 -> 8 -> 9 -> 10
 | 5. Phase Decomposition | 0/3 | Not started | - |
 | 6. Module Isolation | 0/3 | Not started | - |
 | 7. Phase Runner and Review | 4/4 | Complete   | 2026-03-13 |
-| 8. CLI and Progress | 3/4 | In Progress |  |
+| 8. CLI and Progress | 4/4 | Complete | 2026-03-13 |
 | 9. Reporting and Error Quality | 0/4 | Not started | - |
 | 10. Parallel Execution | 0/4 | Not started | - |
