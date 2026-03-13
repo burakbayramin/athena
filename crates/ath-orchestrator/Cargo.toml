@@ -6,6 +6,11 @@ edition.workspace = true
 [dependencies]
 ath-types = { path = "../ath-types" }
 ath-agents = { path = "../ath-agents" }
+ath-git = { path = "../ath-git" }
 thiserror.workspace = true
 serde.workspace = true
 serde_json.workspace = true
+tokio = { workspace = true, features = ["rt", "macros"] }
+async-trait.workspace = true
+chrono.workspace = true
+uuid.workspace = true

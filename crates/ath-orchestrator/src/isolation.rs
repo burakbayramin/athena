@@ -6,7 +6,7 @@
 
 use std::collections::{HashMap, HashSet};
 
-use ath_types::plan::{ExecutionPlan, TaskSpec};
+use ath_types::plan::{ExecutionPlan, PhaseSpec, TaskSpec};
 
 use crate::error::IsolationError;
 
