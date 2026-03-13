@@ -187,9 +187,10 @@ Plans:
   2. Running a project with two independent parallel phases completes faster than running the same project with those phases forced sequential
   3. When two parallel phases attempt to write to the same file, IsolationManager blocks the second dispatch before any LLM call — the conflict is reported, not silently skipped
   4. After parallel phases complete, all output files are committed to git with correct per-phase metadata — no interleaved or dropped commits
-**Plans**: 2 plans
+**Plans**: 3 plans
 
 Plans:
+- [ ] 10-00-PLAN.md — Wave 0: Failing test stubs for all 4 parallel execution integration tests (Nyquist RED state)
 - [ ] 10-01-PLAN.md — Error variants, JoinSet parallel dispatch, isolation gate, and commit serialization in AgentCoordinator
 - [ ] 10-02-PLAN.md — Integration tests proving concurrent dispatch, faster-than-sequential timing, isolation enforcement, deterministic ordering
 
@@ -209,4 +210,4 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7 -> 8 -> 9 -> 10
 | 7. Phase Runner and Review | 4/4 | Complete   | 2026-03-13 |
 | 8. CLI and Progress | 4/4 | Complete | 2026-03-13 |
 | 9. Reporting and Error Quality | 4/4 | Complete | 2026-03-13 |
-| 10. Parallel Execution | 0/2 | Not started | - |
+| 10. Parallel Execution | 0/3 | Not started | - |

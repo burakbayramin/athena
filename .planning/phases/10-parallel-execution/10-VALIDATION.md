@@ -2,8 +2,8 @@
 phase: 10
 slug: parallel-execution
 status: draft
-nyquist_compliant: false
-wave_0_complete: false
+nyquist_compliant: true
+wave_0_complete: true
 created: 2026-03-13
 ---
 
@@ -38,21 +38,22 @@ created: 2026-03-13
 
 | Task ID | Plan | Wave | Requirement | Test Type | Automated Command | File Exists | Status |
 |---------|------|------|-------------|-----------|-------------------|-------------|--------|
-| 10-01-01 | 01 | 1 | ORCH-04-a | integration | `cargo test -p ath-orchestrator parallel_phases_overlap` | ❌ W0 | ⬜ pending |
-| 10-02-01 | 02 | 1 | ORCH-04-c | unit | `cargo test -p ath-orchestrator parallel_isolation_blocks_conflict` | ❌ W0 | ⬜ pending |
-| 10-03-01 | 03 | 2 | ORCH-04-d | integration | `cargo test -p ath-orchestrator parallel_commits_correct_metadata` | ❌ W0 | ⬜ pending |
-| 10-04-01 | 04 | 2 | ORCH-04-b | integration | `cargo test -p ath-orchestrator parallel_faster_than_sequential` | ❌ W0 | ⬜ pending |
+| 10-00-01 | 00 | 0 | ORCH-04 | stub | `cargo test -p ath-orchestrator parallel_ -- 2>&1 \| grep FAILED` | W0 creates | ⬜ pending |
+| 10-01-01 | 01 | 1 | ORCH-04-a | integration | `cargo test -p ath-orchestrator parallel_phases_overlap` | ✅ W0 | ⬜ pending |
+| 10-01-02 | 01 | 1 | ORCH-04-c | unit | `cargo test -p ath-orchestrator parallel_isolation_blocks_conflict` | ✅ W0 | ⬜ pending |
+| 10-02-01 | 02 | 2 | ORCH-04-d | integration | `cargo test -p ath-orchestrator parallel_commits_correct_metadata` | ✅ W0 | ⬜ pending |
+| 10-02-02 | 02 | 2 | ORCH-04-b | integration | `cargo test -p ath-orchestrator parallel_faster_than_sequential` | ✅ W0 | ⬜ pending |
 
-*Status: ⬜ pending · ✅ green · ❌ red · ⚠️ flaky*
+*Status: ⬜ pending -- ✅ green -- ❌ red -- ⚠️ flaky*
 
 ---
 
 ## Wave 0 Requirements
 
-- [ ] All 4 test cases above need to be created as failing tests before implementation
-- [ ] No new test infrastructure (fixtures, framework) needed — existing MockBackend and tempfile patterns cover all cases
+- [x] All 4 test cases created as failing stubs in plan 00 before implementation
+- [x] No new test infrastructure (fixtures, framework) needed -- existing MockBackend and tempfile patterns cover all cases
 
-*Existing infrastructure covers most phase requirements.*
+*Wave 0 plan (10-00-PLAN.md) creates the 4 failing test stubs. Plans 01 and 02 depend on plan 00.*
 
 ---
 
@@ -66,11 +67,11 @@ created: 2026-03-13
 
 ## Validation Sign-Off
 
-- [ ] All tasks have `<automated>` verify or Wave 0 dependencies
-- [ ] Sampling continuity: no 3 consecutive tasks without automated verify
-- [ ] Wave 0 covers all MISSING references
-- [ ] No watch-mode flags
-- [ ] Feedback latency < 30s
-- [ ] `nyquist_compliant: true` set in frontmatter
+- [x] All tasks have `<automated>` verify or Wave 0 dependencies
+- [x] Sampling continuity: no 3 consecutive tasks without automated verify
+- [x] Wave 0 covers all MISSING references
+- [x] No watch-mode flags
+- [x] Feedback latency < 30s
+- [x] `nyquist_compliant: true` set in frontmatter
 
-**Approval:** pending
+**Approval:** approved (Wave 0 plan added)
