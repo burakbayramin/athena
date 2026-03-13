@@ -374,4 +374,199 @@ mod tests {
         let content = std::fs::read_to_string(&file_path).unwrap();
         assert_eq!(content, "fn main() {}");
     }
+
+    // ==================== Integration Tests ====================
+
+    // Integration Test 1: Full pipeline with 2 phases, each with 2 tasks,
+    // multi-agent (Claude + Gemini), cross-agent review
+    #[tokio::test]
+    async fn full_pipeline_passes() {
+        let claude = AgentKind::Claude("opus-4".into());
+        let gemini = AgentKind::Gemini("2.5-pro".into());
+        let codex = AgentKind::Codex("o3".into());
+
+        // Phase 1: 2 Claude tasks, Phase 2: 2 Gemini tasks
+        let phase1 = make_phase(
+            1,
+            "foundation",
+            vec![
+                make_task_spec("setup-project", Some(claude.clone())),
+                make_task_spec("add-types", Some(claude.clone())),
+            ],
+        );
+        let phase2 = make_phase(
+            2,
+            "implementation",
+            vec![
+                make_task_spec("build-api", Some(gemini.clone())),
+                make_task_spec("add-tests", Some(gemini.clone())),
+            ],
+        );
+        let plan = make_plan(vec![phase1, phase2], vec![1, 2]);
+
+        // Phase 1: Claude tasks (2 calls) -> Gemini reviews (1 call)
+        // Phase 2: Gemini tasks (2 calls) -> Claude reviews (1 call)
+        // Claude mock = 2 task responses + 1 review response (reviewer for phase 2)
+        let claude_mock = Arc::new(MockBackend::new(vec![
+            Ok(mock_response(
+                &make_task_output_json("setup-project", &claude, "src/lib.rs"),
+                &claude,
+            )),
+            Ok(mock_response(
+                &make_task_output_json("add-types", &claude, "src/types.rs"),
+                &claude,
+            )),
+            // Claude reviews phase 2 (pass)
+            Ok(mock_response(&passing_verdict_json(), &claude)),
+        ]));
+
+        // Gemini mock = 1 review for phase 1 + 2 task responses for phase 2
+        let gemini_mock = Arc::new(MockBackend::new(vec![
+            // Gemini reviews phase 1 (pass)
+            Ok(mock_response(&passing_verdict_json(), &gemini)),
+            // Gemini tasks for phase 2
+            Ok(mock_response(
+                &make_task_output_json("build-api", &gemini, "src/api.rs"),
+                &gemini,
+            )),
+            Ok(mock_response(
+                &make_task_output_json("add-tests", &gemini, "tests/api_test.rs"),
+                &gemini,
+            )),
+        ]));
+
+        // Register Codex too so it's "available" but won't be chosen (lower priority)
+        let codex_mock = Arc::new(MockBackend::always_ok(&passing_verdict_json()));
+
+        let mut registry = AgentRegistry::new();
+        registry.register(claude.clone(), claude_mock);
+        registry.register(gemini.clone(), gemini_mock);
+        registry.register(codex.clone(), codex_mock);
+
+        let tmp = tempfile::tempdir().unwrap();
+        let coordinator = AgentCoordinator::new(registry, tmp.path().to_path_buf(), None);
+
+        let records = coordinator.run_plan(&plan).await.unwrap();
+
+        // Assert: 2 PhaseRecords returned
+        assert_eq!(records.len(), 2);
+
+        // Both have completed_at
+        assert!(records[0].completed_at.is_some());
+        assert!(records[1].completed_at.is_some());
+
+        // Each has 1 review attempt that passed
+        assert_eq!(records[0].review_attempts.len(), 1);
+        assert!(records[0].review_attempts[0].verdict.passed);
+        assert_eq!(records[1].review_attempts.len(), 1);
+        assert!(records[1].review_attempts[0].verdict.passed);
+
+        // Files exist in output_dir
+        assert!(tmp.path().join("src/lib.rs").exists());
+        assert!(tmp.path().join("src/types.rs").exists());
+        assert!(tmp.path().join("src/api.rs").exists());
+        assert!(tmp.path().join("tests/api_test.rs").exists());
+    }
+
+    // Integration Test 2: Pipeline retry-then-pass
+    #[tokio::test]
+    async fn pipeline_retry_then_pass() {
+        let claude = AgentKind::Claude("opus-4".into());
+        let gemini = AgentKind::Gemini("2.5-pro".into());
+
+        let phase = make_phase(
+            1,
+            "retry-phase",
+            vec![make_task_spec("task-1", Some(claude.clone()))],
+        );
+        let plan = make_plan(vec![phase], vec![1]);
+
+        // Claude: 2 task executions (attempt 1 + retry)
+        let claude_mock = Arc::new(MockBackend::new(vec![
+            Ok(mock_response(
+                &make_task_output_json("task-1", &claude, "src/main.rs"),
+                &claude,
+            )),
+            Ok(mock_response(
+                &make_task_output_json("task-1", &claude, "src/main.rs"),
+                &claude,
+            )),
+        ]));
+
+        // Gemini reviews: fail first, then pass
+        let gemini_mock = Arc::new(MockBackend::new(vec![
+            Ok(mock_response(&failing_verdict_json("Missing error handling"), &gemini)),
+            Ok(mock_response(&passing_verdict_json(), &gemini)),
+        ]));
+
+        let mut registry = AgentRegistry::new();
+        registry.register(claude.clone(), claude_mock);
+        registry.register(gemini.clone(), gemini_mock);
+
+        let tmp = tempfile::tempdir().unwrap();
+        let coordinator = AgentCoordinator::new(registry, tmp.path().to_path_buf(), None);
+
+        let records = coordinator.run_plan(&plan).await.unwrap();
+        assert_eq!(records.len(), 1);
+
+        let record = &records[0];
+        assert_eq!(record.review_attempts.len(), 2);
+        assert!(!record.review_attempts[0].verdict.passed);
+        assert!(record.review_attempts[1].verdict.passed);
+    }
+
+    // Integration Test 3: Pipeline halts on max retries
+    #[tokio::test]
+    async fn pipeline_halts_on_max_retries() {
+        let claude = AgentKind::Claude("opus-4".into());
+        let gemini = AgentKind::Gemini("2.5-pro".into());
+
+        let phase = make_phase(
+            1,
+            "failing-phase",
+            vec![make_task_spec("task-1", Some(claude.clone()))],
+        );
+        let plan = make_plan(vec![phase], vec![1]);
+
+        // Claude: 3 task executions (all attempts)
+        let claude_mock = Arc::new(MockBackend::new(vec![
+            Ok(mock_response(
+                &make_task_output_json("task-1", &claude, "src/main.rs"),
+                &claude,
+            )),
+            Ok(mock_response(
+                &make_task_output_json("task-1", &claude, "src/main.rs"),
+                &claude,
+            )),
+            Ok(mock_response(
+                &make_task_output_json("task-1", &claude, "src/main.rs"),
+                &claude,
+            )),
+        ]));
+
+        // Gemini reviews: fail all 3
+        let gemini_mock = Arc::new(MockBackend::new(vec![
+            Ok(mock_response(&failing_verdict_json("Still broken 1"), &gemini)),
+            Ok(mock_response(&failing_verdict_json("Still broken 2"), &gemini)),
+            Ok(mock_response(&failing_verdict_json("Still broken 3"), &gemini)),
+        ]));
+
+        let mut registry = AgentRegistry::new();
+        registry.register(claude.clone(), claude_mock);
+        registry.register(gemini.clone(), gemini_mock);
+
+        let tmp = tempfile::tempdir().unwrap();
+        let coordinator = AgentCoordinator::new(registry, tmp.path().to_path_buf(), None);
+
+        let result = coordinator.run_plan(&plan).await;
+        assert!(result.is_err());
+
+        let err = result.unwrap_err();
+        assert!(matches!(err, PhaseRunnerError::MaxRetriesExceeded { .. }));
+
+        // Verify error message contains phase name and attempt count
+        let msg = err.to_string();
+        assert!(msg.contains("failing-phase"), "error should contain phase name");
+        assert!(msg.contains("3"), "error should contain attempt count");
+    }
 }
