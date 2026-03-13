@@ -36,5 +36,6 @@ ath-config = { path = "crates/ath-config" }
 ath-cli = { path = "crates/ath-cli" }
 ath-agents = { path = "crates/ath-agents" }
 ath-git = { path = "crates/ath-git" }
+ath-memory = { path = "crates/ath-memory" }
 ath-planner = { path = "crates/ath-planner" }
 ath-orchestrator = { path = "crates/ath-orchestrator" }

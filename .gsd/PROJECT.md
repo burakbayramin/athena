@@ -29,7 +29,11 @@ Intelligent phase analysis — breaking any software project into well-structure
 
 ### Active
 
-(No active requirements — define next milestone with `/gsd:new-milestone`)
+- Memory persistence across runs in `.ath/memory/` filesystem structure — M002
+- Automatic context injection from prior runs into agent prompts — M002
+- CLI inspection, search, and manual memory entry — M002
+- Token budget enforcement for injected context — M002
+- Keyword fallback when no embedding API is available — M002
 
 ### Out of Scope
 
@@ -78,6 +82,7 @@ Durable run reports persisted at `.ath/runs/<run-id>/report.json` with cost esti
 | ID | Name | Status | Completed |
 |----|------|--------|-----------|
 | M001 | Migration | ✅ Complete | 2026-03-13 |
+| M002 | Memory Layer | 🔄 In Progress | — |
 
 ---
-*Last updated: 2026-03-13 after M001 completion*
+*Last updated: 2026-03-14 — M002/S01 (Viking Store & Vector Index) complete*

@@ -1,0 +1,30 @@
+//! # ath-memory
+//!
+//! Viking memory subsystem for the Athena orchestrator.
+//!
+//! Provides a layered knowledge store backed by `viking://` URIs,
+//! filesystem persistence, and vector-indexed search.
+//!
+//! ## Core Types
+//!
+//! - [`VikingUri`] — Parsed `viking://` URI with path traversal protection
+//! - [`LayeredContent`] — Knowledge stored at three detail levels (L0/L1/L2)
+//! - [`MemoryHit`] — Search result with similarity score
+//! - [`MemoryIndex`] — HNSW vector index with cosine similarity
+//! - [`KeywordIndex`] — Inverted index for keyword fallback search
+//! - [`MemoryError`] — Error enum with actionable [`MemoryError::hint()`] messages
+
+pub mod error;
+pub mod index;
+pub mod keyword;
+pub mod store;
+pub mod types;
+pub mod uri;
+
+// Re-export primary types at crate root for convenience.
+pub use error::MemoryError;
+pub use index::{MemoryIndex, SearchResult};
+pub use keyword::{KeywordHit, KeywordIndex};
+pub use store::VikingStore;
+pub use types::{LayeredContent, MemoryHit};
+pub use uri::VikingUri;
