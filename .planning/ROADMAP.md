@@ -118,13 +118,12 @@ Plans:
   2. If the planner attempts to assign overlapping files to two agents in the same phase, IsolationManager blocks the dispatch and reports the conflict before any LLM call is made
   3. After a phase executes, each agent's output files are confirmed to be disjoint — no file appears in two agents' output sets
   4. The agent assignment rationale (which skill matched which agent) is visible in --verbose output
-**Plans**: TBD
+**Plans**: 3 plans
 
 Plans:
-- [ ] 06-01: Skill taxonomy definition — task type to agent capability mapping
-- [ ] 06-02: Agent router — skill-based task-to-agent assignment logic
-- [ ] 06-03: IsolationManager — file ownership registry with pre-dispatch conflict check
-- [ ] 06-04: Post-phase isolation audit — verify disjoint output sets
+- [ ] 06-01-PLAN.md — TaskSpec assigned_agent field, IsolationError types, skill taxonomy routing table
+- [ ] 06-02-PLAN.md — Agent router with majority vote, priority tiebreak, availability fallback, batch assignment
+- [ ] 06-03-PLAN.md — File ownership validation across parallel phases, post-execution output audit
 
 ### Phase 7: Phase Runner and Review
 **Goal**: Athena executes a full phase plan end-to-end — running agent tasks, routing output to a cross-agent reviewer, enforcing the review gate, and retrying on failure — using an enum state machine that makes invalid transitions impossible
@@ -209,7 +208,7 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7 -> 8 -> 9 -> 10
 | 3. Git Layer | 1/3 | In Progress|  |
 | 4. Input Parsing | 1/3 | In Progress|  |
 | 5. Phase Decomposition | 0/3 | Not started | - |
-| 6. Module Isolation | 0/4 | Not started | - |
+| 6. Module Isolation | 0/3 | Not started | - |
 | 7. Phase Runner and Review | 0/5 | Not started | - |
 | 8. CLI and Progress | 0/4 | Not started | - |
 | 9. Reporting and Error Quality | 0/4 | Not started | - |
