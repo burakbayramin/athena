@@ -20,7 +20,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [ ] **Phase 6: Module Isolation** - IsolationManager with file ownership, agent routing, and skill taxonomy
 - [x] **Phase 7: Phase Runner and Review** - PhaseRunner state machine + ReviewEngine with cross-agent review gates (completed 2026-03-13)
 - [x] **Phase 8: CLI and Progress** - clap shell, terminal progress reporting, and dry-run mode (completed 2026-03-13)
-- [ ] **Phase 9: Reporting and Error Quality** - Structured final report, token cost tracking, actionable error messages
+- [x] **Phase 9: Reporting and Error Quality** - Structured final report, token cost tracking, actionable error messages (completed 2026-03-13)
 - [ ] **Phase 10: Parallel Execution** - Parallel independent phase dispatch via tokio JoinSet
 
 ## Phase Details
@@ -175,8 +175,8 @@ Plans:
 Plans:
 - [x] 09-01: ReportWriter — JSON + Markdown report generation from run state
 - [x] 09-02: Token usage accumulator — per-phase, per-agent tracking across the full run
-- [ ] 09-03: Cost estimator — token counts to dollar estimates using known provider pricing
-- [ ] 09-04: Actionable error messages — context-rich formatting for API, review, and schema error types
+- [x] 09-03: Cost estimator — token counts to dollar estimates using known provider pricing
+- [x] 09-04: Actionable error messages — context-rich formatting for API, review, and schema error types
 
 ### Phase 10: Parallel Execution
 **Goal**: Athena executes independent phases in parallel simultaneously across agents — with isolation verified before any concurrent dispatch — reducing total run time for projects with parallelizable work
@@ -210,5 +210,5 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7 -> 8 -> 9 -> 10
 | 6. Module Isolation | 0/3 | Not started | - |
 | 7. Phase Runner and Review | 4/4 | Complete   | 2026-03-13 |
 | 8. CLI and Progress | 4/4 | Complete | 2026-03-13 |
-| 9. Reporting and Error Quality | 2/4 | In Progress | - |
+| 9. Reporting and Error Quality | 4/4 | Complete | 2026-03-13 |
 | 10. Parallel Execution | 0/4 | Not started | - |

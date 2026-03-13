@@ -33,14 +33,14 @@
 - [x] **QUAL-01**: Each phase output is cross-reviewed by a different AI agent (not the author)
 - [x] **QUAL-02**: Review gate blocks phase progression until review passes
 - [x] **QUAL-03**: On review failure, Athena auto-retries with reviewer feedback (max 3 attempts)
-- [ ] **QUAL-04**: Athena tracks and reports token usage and estimated cost per phase per agent
+- [x] **QUAL-04**: Athena tracks and reports token usage and estimated cost per phase per agent
 
 ### Output
 
 - [x] **OUTP-01**: Athena commits generated code to local git repo after each phase with phase/agent metadata
 - [x] **OUTP-02**: Terminal shows real-time progress: current phase, active agent, task status
-- [ ] **OUTP-03**: Athena produces structured final report: phase table, agent assignments, review outcomes
-- [ ] **OUTP-04**: Error messages include actionable context distinguishing API errors, review failures, and schema violations
+- [x] **OUTP-03**: Athena produces structured final report: phase table, agent assignments, review outcomes
+- [x] **OUTP-04**: Error messages include actionable context distinguishing API errors, review failures, and schema violations
 
 ## v2 Requirements
 
@@ -90,11 +90,11 @@
 | QUAL-01 | Phase 7 | Complete |
 | QUAL-02 | Phase 7 | Complete |
 | QUAL-03 | Phase 7 | Complete |
-| QUAL-04 | Phase 9 | Pending |
+| QUAL-04 | Phase 9 | Complete |
 | OUTP-01 | Phase 3 | Complete |
 | OUTP-02 | Phase 8 | Complete |
-| OUTP-03 | Phase 9 | Pending |
-| OUTP-04 | Phase 9 | Pending |
+| OUTP-03 | Phase 9 | Complete |
+| OUTP-04 | Phase 9 | Complete |
 
 **Coverage:**
 - v1 requirements: 22 total
@@ -103,4 +103,4 @@
 
 ---
 *Requirements defined: 2026-03-12*
-*Last updated: 2026-03-13 after Phase 9 Plan 01 execution updates*
+*Last updated: 2026-03-13 after completing Phase 9*
