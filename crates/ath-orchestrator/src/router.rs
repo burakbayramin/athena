@@ -8,6 +8,7 @@ use std::collections::HashMap;
 use std::mem;
 
 use ath_types::agent::AgentKind;
+use ath_types::plan::PhaseSpec;
 use ath_types::project::SkillTag;
 
 use crate::error::IsolationError;
@@ -129,6 +130,29 @@ pub fn route_task(
     })
 }
 
+/// Routes all tasks in a phase, setting each task's `assigned_agent` field.
+///
+/// Iterates over all tasks in the phase, calling `route_task` for each.
+/// On success, every task will have `assigned_agent = Some(...)`.
+/// Fails fast on the first routing error (e.g., all agents unavailable).
+///
+/// Returns the list of `RoutingDecision`s for verbose/diagnostic output.
+pub fn assign_all_tasks(
+    phase: &mut PhaseSpec,
+    table: &HashMap<String, AgentKind>,
+    available: impl Fn(&AgentKind) -> bool,
+) -> Result<Vec<RoutingDecision>, IsolationError> {
+    let mut decisions = Vec::with_capacity(phase.tasks.len());
+
+    for task in &mut phase.tasks {
+        let decision = route_task(&task.skill_tags, table, &available)?;
+        task.assigned_agent = Some(decision.agent.clone());
+        decisions.push(decision);
+    }
+
+    Ok(decisions)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -238,5 +262,90 @@ mod tests {
         )
         .unwrap();
         assert!(matches!(result.agent, AgentKind::Claude(_)));
+    }
+
+    // --- assign_all_tasks tests ---
+
+    use ath_types::plan::{PhaseSpec, TaskSpec};
+
+    fn make_task(name: &str, skill_tags: &[&str]) -> TaskSpec {
+        TaskSpec {
+            name: name.into(),
+            description: format!("{name} description"),
+            skill_tags: tags(skill_tags),
+            expected_output_files: vec![],
+            acceptance_criteria: vec![],
+            goal_indices: vec![],
+            assigned_agent: None,
+        }
+    }
+
+    fn make_phase(tasks: Vec<TaskSpec>) -> PhaseSpec {
+        PhaseSpec {
+            id: 1,
+            name: "Test Phase".into(),
+            description: "A test phase".into(),
+            tasks,
+            depends_on: vec![],
+            produces: vec![],
+            consumes: vec![],
+        }
+    }
+
+    #[test]
+    fn assign_all_tasks_sets_all_agents() {
+        let table = build_routing_table();
+        let mut phase = make_phase(vec![
+            make_task("Task A", &["rust", "logic"]),
+            make_task("Task B", &["docs", "research"]),
+            make_task("Task C", &["codegen", "boilerplate"]),
+        ]);
+
+        let decisions = assign_all_tasks(&mut phase, &table, |_| true).unwrap();
+
+        assert_eq!(decisions.len(), 3);
+        // Every task should now have an assigned agent
+        for task in &phase.tasks {
+            assert!(task.assigned_agent.is_some(), "Task '{}' has no agent", task.name);
+        }
+    }
+
+    #[test]
+    fn assign_all_tasks_routes_to_correct_agents() {
+        let table = build_routing_table();
+        let mut phase = make_phase(vec![
+            make_task("Rust task", &["rust", "logic"]),      // -> Claude
+            make_task("Docs task", &["docs", "research"]),   // -> Gemini
+            make_task("Gen task", &["codegen", "boilerplate"]), // -> Codex
+        ]);
+
+        let decisions = assign_all_tasks(&mut phase, &table, |_| true).unwrap();
+
+        assert!(matches!(phase.tasks[0].assigned_agent, Some(AgentKind::Claude(_))));
+        assert!(matches!(phase.tasks[1].assigned_agent, Some(AgentKind::Gemini(_))));
+        assert!(matches!(phase.tasks[2].assigned_agent, Some(AgentKind::Codex(_))));
+
+        // Decisions match task agents
+        assert!(matches!(decisions[0].agent, AgentKind::Claude(_)));
+        assert!(matches!(decisions[1].agent, AgentKind::Gemini(_)));
+        assert!(matches!(decisions[2].agent, AgentKind::Codex(_)));
+    }
+
+    #[test]
+    fn assign_all_tasks_error_stops_processing() {
+        let table = build_routing_table();
+        let mut phase = make_phase(vec![
+            make_task("Good task", &["rust"]),
+            make_task("Bad task", &["rust", "docs", "codegen"]), // all agents unavailable
+            make_task("Never reached", &["docs"]),
+        ]);
+
+        // All agents unavailable
+        let result = assign_all_tasks(&mut phase, &table, |_| false);
+        assert!(result.is_err());
+        assert!(matches!(
+            result.unwrap_err(),
+            IsolationError::AllAgentsUnavailable { .. }
+        ));
     }
 }
