@@ -122,6 +122,7 @@ dependencies = [
  "ath-orchestrator",
  "ath-planner",
  "ath-types",
+ "chrono",
  "clap",
  "colored",
  "indicatif",
@@ -131,6 +132,7 @@ dependencies = [
  "tracing",
  "tracing-indicatif",
  "tracing-subscriber",
+ "uuid",
 ]
 
 [[package]]
