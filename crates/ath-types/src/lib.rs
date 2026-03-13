@@ -10,19 +10,19 @@
 //! - Phase records and audit trails
 //! - Unified validation error types
 
-pub mod error;
 pub mod agent;
-pub mod project;
-pub mod review;
+pub mod error;
 pub mod phase;
 pub mod plan;
+pub mod project;
 pub mod report;
+pub mod review;
 
 // Re-export key types at crate root for ergonomic imports
-pub use error::ValidationError;
 pub use agent::{AgentKind, AgentRequest, AgentResponse};
-pub use project::{ProjectSpec, GoalSpec, SkillTag};
-pub use review::{ReviewVerdict, Severity, CodeSuggestion};
-pub use phase::{PhaseRecord, ReviewAttempt, TokenUsage, AgentContribution};
-pub use plan::{ExecutionPlan, PhaseSpec, TaskSpec, ContractLabel};
-pub use report::{RunReport, RunTotals};
+pub use error::ValidationError;
+pub use phase::{AgentContribution, PhaseRecord, ReviewAttempt, TokenUsage};
+pub use plan::{ContractLabel, ExecutionPlan, PhaseSpec, TaskSpec};
+pub use project::{GoalSpec, ProjectSpec, SkillTag};
+pub use report::{AgentTotals, PhaseSummary, ReportTotals, RunReport, RunTotals};
+pub use review::{CodeSuggestion, ReviewVerdict, Severity};

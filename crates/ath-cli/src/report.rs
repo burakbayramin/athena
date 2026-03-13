@@ -4,7 +4,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use anyhow::{anyhow, Result};
 use ath_types::phase::PhaseRecord;
 use ath_types::plan::ExecutionPlan;
-use ath_types::report::{RunReport, RunTotals};
+use ath_types::report::{AgentTotals, PhaseSummary, ReportTotals, RunReport, RunTotals};
 use clap::Args;
 
 use crate::GlobalArgs;
@@ -44,12 +44,14 @@ pub(crate) fn resolve_target(target: Option<&str>) -> ReportTarget {
 }
 
 pub(crate) fn build_run_report(plan: &ExecutionPlan, phase_records: &[PhaseRecord]) -> RunReport {
+    let phase_summaries = build_phase_summaries(phase_records);
     RunReport {
         run_id: next_run_id(),
         generated_at: chrono::Utc::now(),
         plan: plan.clone(),
         phase_records: phase_records.to_vec(),
-        totals: aggregate_totals(phase_records),
+        totals: aggregate_report_totals(&phase_summaries),
+        phase_summaries,
     }
 }
 
@@ -73,6 +75,12 @@ pub(crate) fn load_report(project_dir: &Path, target: &ReportTarget) -> Result<R
 }
 
 pub(crate) fn render_report(report: &RunReport) -> String {
+    let phase_summaries = phase_summaries(report);
+    let totals = if report.phase_summaries.is_empty() {
+        aggregate_report_totals(&phase_summaries)
+    } else {
+        report.totals.clone()
+    };
     let mut out = String::new();
     out.push_str("Run Report\n");
     out.push_str(&format!("Run ID: {}\n", report.run_id));
@@ -82,39 +90,123 @@ pub(crate) fn render_report(report: &RunReport) -> String {
     ));
     out.push_str(&format!(
         "Phases: {} | Planned waves: {}\n",
-        report.phase_records.len(),
+        phase_summaries.len(),
         report.plan.parallel_groups.len()
     ));
     out.push('\n');
 
-    for record in &report.phase_records {
+    for phase in &phase_summaries {
+        out.push_str(&format!("Phase {}: {}\n", phase.phase_id, phase.phase_name));
+        out.push_str(&format!("Review attempts: {}\n", phase.review_attempts));
+        out.push_str(&format!("Input tokens: {}\n", phase.totals.input_tokens));
+        out.push_str(&format!("Output tokens: {}\n", phase.totals.output_tokens));
         out.push_str(&format!(
-            "Phase {}: {} | Review attempts: {}\n",
-            record.phase_id,
-            record.phase_name,
-            record.review_attempts.len()
+            "Estimated cost: {}\n",
+            format_cost(phase.totals.estimated_cost_usd)
         ));
+
+        for agent in &phase.agent_totals {
+            out.push_str(&format!(
+                "  - {}/{}: {} input, {} output, {}\n",
+                agent.agent.provider_name(),
+                agent.agent.model(),
+                agent.input_tokens,
+                agent.output_tokens,
+                format_cost(agent.estimated_cost_usd)
+            ));
+        }
+        out.push('\n');
     }
 
-    out.push('\n');
+    out.push_str("Run totals\n");
+    out.push_str(&format!("Total input tokens: {}\n", totals.input_tokens));
+    out.push_str(&format!("Total output tokens: {}\n", totals.output_tokens));
     out.push_str(&format!(
-        "Totals: {} input, {} output, ${:.2} estimated\n",
-        report.totals.input_tokens, report.totals.output_tokens, report.totals.estimated_cost_usd
+        "Total estimated cost: {}\n",
+        format_cost(totals.estimated_cost_usd)
     ));
 
     out
 }
 
-fn aggregate_totals(phase_records: &[PhaseRecord]) -> RunTotals {
-    let mut totals = RunTotals::default();
-    for record in phase_records {
-        for contribution in &record.contributions {
-            totals.input_tokens += contribution.tokens.input_tokens;
-            totals.output_tokens += contribution.tokens.output_tokens;
-            totals.estimated_cost_usd += contribution.tokens.estimated_cost_usd;
-        }
+fn phase_summaries(report: &RunReport) -> Vec<PhaseSummary> {
+    if report.phase_summaries.is_empty() {
+        build_phase_summaries(&report.phase_records)
+    } else {
+        report.phase_summaries.clone()
     }
-    totals
+}
+
+fn build_phase_summaries(phase_records: &[PhaseRecord]) -> Vec<PhaseSummary> {
+    phase_records.iter().map(build_phase_summary).collect()
+}
+
+fn build_phase_summary(record: &PhaseRecord) -> PhaseSummary {
+    let agent_totals: Vec<AgentTotals> = record
+        .contributions
+        .iter()
+        .map(|contribution| AgentTotals {
+            agent: contribution.agent.clone(),
+            input_tokens: contribution.tokens.input_tokens,
+            output_tokens: contribution.tokens.output_tokens,
+            estimated_cost_usd: crate::cost::estimate_cost(
+                &contribution.agent,
+                contribution.tokens.input_tokens,
+                contribution.tokens.output_tokens,
+            )
+            .ok(),
+            files_produced: contribution.files_produced.clone(),
+        })
+        .collect();
+
+    PhaseSummary {
+        phase_id: record.phase_id,
+        phase_name: record.phase_name.clone(),
+        review_attempts: record.review_attempts.len() as u32,
+        totals: aggregate_agent_totals(&agent_totals),
+        agent_totals,
+    }
+}
+
+fn aggregate_agent_totals(agent_totals: &[AgentTotals]) -> ReportTotals {
+    ReportTotals {
+        input_tokens: agent_totals.iter().map(|agent| agent.input_tokens).sum(),
+        output_tokens: agent_totals.iter().map(|agent| agent.output_tokens).sum(),
+        estimated_cost_usd: sum_costs(agent_totals.iter().map(|agent| agent.estimated_cost_usd)),
+    }
+}
+
+fn aggregate_report_totals(phase_summaries: &[PhaseSummary]) -> RunTotals {
+    RunTotals {
+        input_tokens: phase_summaries
+            .iter()
+            .map(|phase| phase.totals.input_tokens)
+            .sum(),
+        output_tokens: phase_summaries
+            .iter()
+            .map(|phase| phase.totals.output_tokens)
+            .sum(),
+        estimated_cost_usd: sum_costs(
+            phase_summaries
+                .iter()
+                .map(|phase| phase.totals.estimated_cost_usd),
+        ),
+    }
+}
+
+fn sum_costs(costs: impl IntoIterator<Item = Option<f64>>) -> Option<f64> {
+    let mut total = 0.0;
+    for cost in costs {
+        total += cost?;
+    }
+    Some(total)
+}
+
+fn format_cost(cost: Option<f64>) -> String {
+    match cost {
+        Some(amount) => format!("${amount:.4}"),
+        None => "n/a".into(),
+    }
 }
 
 fn next_run_id() -> String {
@@ -182,7 +274,7 @@ fn latest_run_pointer_path(project_dir: &Path) -> PathBuf {
 mod tests {
     use super::*;
     use ath_types::phase::PhaseRecord;
-    use ath_types::report::RunReport;
+    use ath_types::report::{ReportTotals, RunReport};
     use ath_types::review::{ReviewVerdict, Severity};
 
     #[test]
@@ -237,17 +329,28 @@ mod tests {
         assert_eq!(report.phase_summaries.len(), 1);
         assert_eq!(report.phase_summaries[0].totals.input_tokens, 125);
         assert_eq!(report.phase_summaries[0].totals.output_tokens, 50);
-        assert!(report.phase_summaries[0].totals.estimated_cost_usd.is_some());
-        assert_eq!(
-            report.phase_summaries[0].agent_totals[0].estimated_cost_usd,
-            Some(0.001)
+        assert!(report.phase_summaries[0]
+            .totals
+            .estimated_cost_usd
+            .is_some());
+        assert!(
+            (report.phase_summaries[0].agent_totals[0]
+                .estimated_cost_usd
+                .expect("known author pricing")
+                - 0.003)
+                .abs()
+                < f64::EPSILON
         );
         assert!(report.totals.estimated_cost_usd.is_some());
     }
 
     #[test]
     fn render_report_surfaces_phase_and_run_usage_totals() {
-        let output = render_report(&sample_report("run-9"));
+        let built = build_run_report(
+            &sample_report("run-9").plan,
+            &sample_report("run-9").phase_records,
+        );
+        let output = render_report(&built);
 
         assert!(output.contains("Phase 1: foundation"));
         assert!(output.contains("Input tokens: 125"));
@@ -285,15 +388,26 @@ mod tests {
                 phase_name: "foundation".into(),
                 started_at: chrono::Utc::now(),
                 completed_at: Some(chrono::Utc::now()),
-                contributions: vec![ath_types::phase::AgentContribution {
-                    agent: ath_types::agent::AgentKind::Claude("opus-4".into()),
-                    tokens: ath_types::phase::TokenUsage {
-                        input_tokens: 100,
-                        output_tokens: 20,
-                        estimated_cost_usd: 0.0,
+                contributions: vec![
+                    ath_types::phase::AgentContribution {
+                        agent: ath_types::agent::AgentKind::Claude("opus-4".into()),
+                        tokens: ath_types::phase::TokenUsage {
+                            input_tokens: 100,
+                            output_tokens: 20,
+                            estimated_cost_usd: 0.0,
+                        },
+                        files_produced: vec!["src/lib.rs".into()],
                     },
-                    files_produced: vec!["src/lib.rs".into()],
-                }],
+                    ath_types::phase::AgentContribution {
+                        agent: ath_types::agent::AgentKind::Gemini("2.5-pro".into()),
+                        tokens: ath_types::phase::TokenUsage {
+                            input_tokens: 25,
+                            output_tokens: 30,
+                            estimated_cost_usd: 0.0,
+                        },
+                        files_produced: vec![],
+                    },
+                ],
                 review_attempts: vec![ath_types::phase::ReviewAttempt {
                     attempt_number: 1,
                     verdict: ReviewVerdict {
@@ -312,7 +426,7 @@ mod tests {
                 }],
             }],
             phase_summaries: vec![],
-            totals: ath_types::report::ReportTotals::default(),
+            totals: ReportTotals::default(),
         }
     }
 }

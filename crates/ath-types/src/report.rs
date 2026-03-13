@@ -6,6 +6,7 @@
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
+use crate::agent::AgentKind;
 use crate::phase::PhaseRecord;
 use crate::plan::ExecutionPlan;
 
@@ -20,10 +21,20 @@ pub struct ReportTotals {
     pub estimated_cost_usd: Option<f64>,
 }
 
+impl Default for ReportTotals {
+    fn default() -> Self {
+        Self {
+            input_tokens: 0,
+            output_tokens: 0,
+            estimated_cost_usd: Some(0.0),
+        }
+    }
+}
+
 /// Usage totals for one agent inside a saved phase summary.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct AgentTotals {
-    pub agent: crate::agent::AgentKind,
+    pub agent: AgentKind,
     pub input_tokens: u64,
     pub output_tokens: u64,
     pub estimated_cost_usd: Option<f64>,
@@ -52,10 +63,14 @@ pub struct RunReport {
     /// Completed phase records from execution.
     pub phase_records: Vec<PhaseRecord>,
     /// Aggregated phase summaries for report rendering.
+    #[serde(default)]
     pub phase_summaries: Vec<PhaseSummary>,
     /// Aggregated totals across the run.
+    #[serde(default)]
     pub totals: ReportTotals,
 }
+
+pub type RunTotals = ReportTotals;
 
 #[cfg(test)]
 mod tests {
