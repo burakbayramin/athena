@@ -70,6 +70,14 @@ pub enum PhaseRunnerError {
     /// Atomic file write failed.
     #[error("Atomic write to '{path}' failed: {reason}")]
     AtomicWriteFailed { path: String, reason: String },
+
+    /// Pre-dispatch isolation check found file ownership conflicts.
+    #[error("Isolation violation: {details}")]
+    IsolationViolation { details: String },
+
+    /// A phase within a parallel group failed or panicked.
+    #[error("Parallel phase '{phase_name}' failed: {reason}")]
+    ParallelPhaseFailed { phase_name: String, reason: String },
 }
 
 impl PhaseRunnerError {
@@ -92,6 +100,13 @@ impl PhaseRunnerError {
             }
             PhaseRunnerError::AtomicWriteFailed { .. } => {
                 "Check file permissions and disk space at the target path".into()
+            }
+            PhaseRunnerError::IsolationViolation { .. } => {
+                "Resolve file ownership conflicts between parallel phases before retrying".into()
+            }
+            PhaseRunnerError::ParallelPhaseFailed { .. } => {
+                "Check the failing phase's agent output and retry, or force sequential execution"
+                    .into()
             }
         }
     }
@@ -238,6 +253,52 @@ mod tests {
     }
 
     #[test]
+    fn isolation_violation_display() {
+        let err = PhaseRunnerError::IsolationViolation {
+            details: "File 'src/main.rs' claimed by two phases".into(),
+        };
+        assert_eq!(
+            err.to_string(),
+            "Isolation violation: File 'src/main.rs' claimed by two phases"
+        );
+    }
+
+    #[test]
+    fn isolation_violation_hint() {
+        let err = PhaseRunnerError::IsolationViolation {
+            details: "conflict".into(),
+        };
+        assert_eq!(
+            err.hint(),
+            "Resolve file ownership conflicts between parallel phases before retrying"
+        );
+    }
+
+    #[test]
+    fn parallel_phase_failed_display() {
+        let err = PhaseRunnerError::ParallelPhaseFailed {
+            phase_name: "build-api".into(),
+            reason: "task panicked".into(),
+        };
+        assert_eq!(
+            err.to_string(),
+            "Parallel phase 'build-api' failed: task panicked"
+        );
+    }
+
+    #[test]
+    fn parallel_phase_failed_hint() {
+        let err = PhaseRunnerError::ParallelPhaseFailed {
+            phase_name: "p".into(),
+            reason: "r".into(),
+        };
+        assert_eq!(
+            err.hint(),
+            "Check the failing phase's agent output and retry, or force sequential execution"
+        );
+    }
+
+    #[test]
     fn all_phase_runner_variants_have_hints() {
         let errors: Vec<PhaseRunnerError> = vec![
             PhaseRunnerError::NoReviewerAvailable {
@@ -261,6 +322,13 @@ mod tests {
             },
             PhaseRunnerError::AtomicWriteFailed {
                 path: "p".into(),
+                reason: "r".into(),
+            },
+            PhaseRunnerError::IsolationViolation {
+                details: "conflict".into(),
+            },
+            PhaseRunnerError::ParallelPhaseFailed {
+                phase_name: "p".into(),
                 reason: "r".into(),
             },
         ];
