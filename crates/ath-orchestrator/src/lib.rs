@@ -7,4 +7,6 @@
 //! complete audit trail of a project run.
 
 pub mod error;
+pub mod isolation;
+pub mod router;
 pub mod taxonomy;
