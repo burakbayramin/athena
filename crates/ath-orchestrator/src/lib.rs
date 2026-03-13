@@ -8,5 +8,6 @@
 
 pub mod error;
 pub mod isolation;
+pub mod review;
 pub mod router;
 pub mod taxonomy;
