@@ -173,6 +173,7 @@ dependencies = [
 name = "ath-memory"
 version = "0.1.0"
 dependencies = [
+ "ath-types",
  "chrono",
  "hnsw",
  "rand 0.8.5",

@@ -52,7 +52,7 @@ This milestone is complete only when all are true:
 - [x] **S01: Viking Store & Vector Index** `risk:high` `depends:[]`
   > After this: `ath-memory` crate exists with Viking URI parsing, L0/L1/L2 read/write, and vector search — all proven by unit tests with persisted data on disk
 
-- [ ] **S02: Observation System** `risk:medium` `depends:[]`
+- [x] **S02: Observation System** `risk:medium` `depends:[]`
   > After this: Observation types, append-only JSONL writer, and observation buffer are implemented — proven by unit tests that capture and serialize observation events
 
 - [ ] **S03: Memory Extraction Pipeline** `risk:high` `depends:[S01,S02]`

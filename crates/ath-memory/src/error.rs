@@ -58,6 +58,24 @@ pub enum MemoryError {
         /// The dimension of the incoming vector.
         actual: usize,
     },
+
+    /// Failed to write an observation to JSONL storage.
+    #[error("Observation write error at '{path}': {message}")]
+    ObservationWriteError {
+        /// The path involved.
+        path: String,
+        /// Description of the failure.
+        message: String,
+    },
+
+    /// Failed to read observations from JSONL storage.
+    #[error("Observation read error at '{path}': {message}")]
+    ObservationReadError {
+        /// The path involved.
+        path: String,
+        /// Description of the failure.
+        message: String,
+    },
 }
 
 impl MemoryError {
@@ -81,6 +99,12 @@ impl MemoryError {
             }
             MemoryError::DimensionMismatch { .. } => {
                 "The embedding model dimension changed — rebuild the index with the new model or switch back to the original"
+            }
+            MemoryError::ObservationWriteError { .. } => {
+                "Check that .ath/memory/observations/ exists and is writable — observation data may be lost but the run can continue"
+            }
+            MemoryError::ObservationReadError { .. } => {
+                "Inspect the JSONL file for corruption or encoding issues — each line must be valid JSON"
             }
         }
     }
@@ -170,6 +194,14 @@ mod tests {
             MemoryError::DimensionMismatch {
                 expected: 1,
                 actual: 2,
+            },
+            MemoryError::ObservationWriteError {
+                path: "x".into(),
+                message: "y".into(),
+            },
+            MemoryError::ObservationReadError {
+                path: "x".into(),
+                message: "y".into(),
             },
         ];
 

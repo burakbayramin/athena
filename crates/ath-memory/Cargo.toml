@@ -10,6 +10,7 @@ thiserror.workspace = true
 uuid.workspace = true
 chrono.workspace = true
 tracing.workspace = true
+ath-types = { path = "../ath-types" }
 hnsw = { version = "0.11", features = ["serde1"] }
 space = "0.17"
 rand_pcg = "0.3"

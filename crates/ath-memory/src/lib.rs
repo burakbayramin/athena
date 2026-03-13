@@ -17,6 +17,7 @@
 pub mod error;
 pub mod index;
 pub mod keyword;
+pub mod observe;
 pub mod store;
 pub mod types;
 pub mod uri;
@@ -27,4 +28,8 @@ pub use index::{MemoryIndex, SearchResult};
 pub use keyword::{KeywordHit, KeywordIndex};
 pub use store::VikingStore;
 pub use types::{LayeredContent, MemoryHit};
+pub use observe::{
+    FileOpKind, Observation, ObservationBuffer, ObservationReader, ObservationType,
+    ObservationWriter,
+};
 pub use uri::VikingUri;
