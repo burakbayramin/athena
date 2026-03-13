@@ -135,14 +135,13 @@ Plans:
   3. After 3 failed review attempts, Athena halts phase execution and reports the final reviewer verdict — it does not enter a fourth retry or loop indefinitely
   4. Cross-agent review pairing is enforced — the author agent's output is never reviewed by the same agent that produced it
   5. A complete sequential run (all phases in order, each reviewed) completes successfully on a real project without manual intervention
-**Plans**: TBD
+**Plans**: 4 plans
 
 Plans:
-- [ ] 07-01: PhaseState enum machine — Pending, Running, AwaitingReview, Complete, ReviewFailed transitions
-- [ ] 07-02: ReviewEngine — cross-vendor pairing table, structured pass/fail verdict extraction
-- [ ] 07-03: Retry loop with convergence guard — max 3 attempts, reviewer feedback injection
-- [ ] 07-04: AgentCoordinator — sequential phase dispatch, JoinSet task fan-out within a phase
-- [ ] 07-05: End-to-end integration test — full pipeline on a synthetic project
+- [ ] 07-01-PLAN.md — PhaseRunnerError types, PhaseState typestate machine, TaskOutput/FileOutput structs, PhaseStatus enum
+- [ ] 07-02-PLAN.md — ReviewEngine: cross-agent reviewer selection, review prompt construction, verdict parsing, retry prompt builder
+- [ ] 07-03-PLAN.md — PhaseRunner orchestration loop: task dispatch, review gate, retry with feedback, atomic file writes
+- [ ] 07-04-PLAN.md — AgentCoordinator: sequential phase dispatch, end-to-end integration tests on synthetic project
 
 ### Phase 8: CLI and Progress
 **Goal**: Athena has a complete CLI surface with subcommands, and the terminal shows real-time phase and agent status during execution — so users are never looking at a silent, hung process
@@ -153,7 +152,7 @@ Plans:
   2. During execution, the terminal updates in real time showing: current phase name, active agent, task status (running/complete/failed)
   3. `ath run --dry-run` prints the full phase plan and exits without executing any LLM or git call
   4. `ath run --verbose` shows full agent prompt/response transcripts in addition to normal progress output
-**Plans**: TBD
+**Plans**: 4 plans
 
 Plans:
 - [ ] 08-01: clap subcommand definitions — run, init, report with full argument surface
@@ -171,7 +170,7 @@ Plans:
   3. An API authentication error message names the provider and tells the user which env var or config key to check
   4. A review failure error message includes the phase name, which agent reviewed, which attempt failed, and the reviewer's verdict text
   5. A schema validation error identifies the field that failed deserialization and the raw value that was received
-**Plans**: TBD
+**Plans**: 4 plans
 
 Plans:
 - [ ] 09-01: ReportWriter — JSON + Markdown report generation from run state
@@ -188,7 +187,7 @@ Plans:
   2. Running a project with two independent parallel phases completes faster than running the same project with those phases forced sequential
   3. When two parallel phases attempt to write to the same file, IsolationManager blocks the second dispatch before any LLM call — the conflict is reported, not silently skipped
   4. After parallel phases complete, all output files are committed to git with correct per-phase metadata — no interleaved or dropped commits
-**Plans**: TBD
+**Plans**: 4 plans
 
 Plans:
 - [ ] 10-01: Parallel dispatch enablement in AgentCoordinator — activate JoinSet fan-out for independent phases
@@ -209,7 +208,7 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7 -> 8 -> 9 -> 10
 | 4. Input Parsing | 1/3 | In Progress|  |
 | 5. Phase Decomposition | 0/3 | Not started | - |
 | 6. Module Isolation | 0/3 | Not started | - |
-| 7. Phase Runner and Review | 0/5 | Not started | - |
+| 7. Phase Runner and Review | 0/4 | Not started | - |
 | 8. CLI and Progress | 0/4 | Not started | - |
 | 9. Reporting and Error Quality | 0/4 | Not started | - |
 | 10. Parallel Execution | 0/4 | Not started | - |
