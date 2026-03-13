@@ -110,6 +110,11 @@ mod tests {
                             suggestion: "Add Result return type".into(),
                         }],
                     },
+                    tokens: TokenUsage {
+                        input_tokens: 1200,
+                        output_tokens: 400,
+                        estimated_cost_usd: 0.02,
+                    },
                     timestamp: Utc::now(),
                 },
                 ReviewAttempt {
@@ -120,6 +125,11 @@ mod tests {
                         severity: Severity::Info,
                         reason: "All issues addressed".into(),
                         suggestions: vec![],
+                    },
+                    tokens: TokenUsage {
+                        input_tokens: 800,
+                        output_tokens: 200,
+                        estimated_cost_usd: 0.01,
                     },
                     timestamp: Utc::now(),
                 },
