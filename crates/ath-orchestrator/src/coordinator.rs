@@ -781,7 +781,7 @@ mod tests {
         assert!(msg.contains("3"), "error should contain attempt count");
     }
 
-    // ==================== Wave 0: Parallel execution helpers ====================
+    // ==================== Parallel execution helpers ====================
 
     fn make_plan_with_groups(
         phases: Vec<PhaseSpec>,
@@ -802,10 +802,71 @@ mod tests {
         spec
     }
 
-    // ==================== Wave 0: parallel_phases_overlap ====================
+    // ==================== DelayedMockBackend ====================
+
+    /// A mock backend that introduces an artificial delay before delegating
+    /// to an inner `MockBackend`. Tracks the maximum number of concurrent
+    /// in-flight calls via a shared atomic counter.
+    struct DelayedMockBackend {
+        inner: MockBackend,
+        delay: std::time::Duration,
+        /// Shared counter: incremented on entry, decremented on exit.
+        concurrent: Arc<std::sync::atomic::AtomicU32>,
+        /// Records the peak concurrency observed during the backend's lifetime.
+        max_concurrent: Arc<std::sync::atomic::AtomicU32>,
+    }
+
+    impl DelayedMockBackend {
+        fn new(
+            inner: MockBackend,
+            delay: std::time::Duration,
+            concurrent: Arc<std::sync::atomic::AtomicU32>,
+            max_concurrent: Arc<std::sync::atomic::AtomicU32>,
+        ) -> Self {
+            Self {
+                inner,
+                delay,
+                concurrent,
+                max_concurrent,
+            }
+        }
+    }
+
+    #[async_trait::async_trait]
+    impl ath_agents::AgentBackend for DelayedMockBackend {
+        async fn send(
+            &self,
+            request: ath_types::agent::AgentRequest,
+        ) -> Result<AgentResponse, ath_agents::AgentError> {
+            use std::sync::atomic::Ordering;
+            // Bump concurrent counter; update max_concurrent if needed
+            let prev = self.concurrent.fetch_add(1, Ordering::SeqCst);
+            let current = prev + 1;
+            self.max_concurrent.fetch_max(current, Ordering::SeqCst);
+
+            tokio::time::sleep(self.delay).await;
+
+            // Decrement after delay
+            self.concurrent.fetch_sub(1, Ordering::SeqCst);
+
+            self.inner.send(request).await
+        }
+
+        async fn is_available(&self) -> bool {
+            true
+        }
+
+        fn provider_name(&self) -> &str {
+            "delayed-mock"
+        }
+    }
+
+    // ==================== Parallel: parallel_phases_overlap ====================
 
     #[tokio::test]
     async fn parallel_phases_overlap() {
+        use std::sync::atomic::AtomicU32;
+
         let claude = AgentKind::Claude("opus-4".into());
         let gemini = AgentKind::Gemini("2.5-pro".into());
 
@@ -819,16 +880,17 @@ mod tests {
             vec![vec![1, 2]],
         );
 
-        let task_mock = Arc::new(MockBackend::new(vec![
-            Ok(mock_response(
+        let concurrent = Arc::new(AtomicU32::new(0));
+        let max_concurrent = Arc::new(AtomicU32::new(0));
+
+        let task_mock = Arc::new(DelayedMockBackend::new(
+            MockBackend::always_ok(
                 &make_task_output_json("task-a", &claude, "src/a.rs"),
-                &claude,
-            )),
-            Ok(mock_response(
-                &make_task_output_json("task-b", &claude, "src/b.rs"),
-                &claude,
-            )),
-        ]));
+            ),
+            std::time::Duration::from_millis(80),
+            Arc::clone(&concurrent),
+            Arc::clone(&max_concurrent),
+        ));
         let reviewer_mock = Arc::new(MockBackend::always_ok(&passing_verdict_json()));
 
         let mut registry = AgentRegistry::new();
@@ -838,51 +900,116 @@ mod tests {
         let tmp = tempfile::tempdir().unwrap();
         let coordinator = AgentCoordinator::new(registry, tmp.path().to_path_buf(), None);
 
-        let _result = coordinator.run_plan(&plan).await;
-        todo!("Wave 0 stub: parallel_phases_overlap -- must prove concurrent execution overlap via timing or concurrency counter");
+        let result = coordinator.run_plan(&plan).await;
+        assert!(result.is_ok(), "parallel plan should succeed: {:?}", result.err());
+
+        let records = result.unwrap();
+        assert_eq!(records.len(), 2);
+        assert!(records[0].completed_at.is_some());
+        assert!(records[1].completed_at.is_some());
+
+        // Prove overlap: max_concurrent must have reached 2 at some point
+        let peak = max_concurrent.load(std::sync::atomic::Ordering::SeqCst);
+        assert!(
+            peak >= 2,
+            "Expected max concurrent >= 2 (proving overlap), got {}",
+            peak
+        );
     }
 
-    // ==================== Wave 0: parallel_faster_than_sequential ====================
+    // ==================== Parallel: parallel_faster_than_sequential ====================
 
     #[tokio::test]
     async fn parallel_faster_than_sequential() {
+        use std::sync::atomic::AtomicU32;
+
         let claude = AgentKind::Claude("opus-4".into());
         let gemini = AgentKind::Gemini("2.5-pro".into());
 
-        let tasks1 = vec![make_task_spec("task-a", Some(claude.clone()))];
-        let tasks2 = vec![make_task_spec("task-b", Some(claude.clone()))];
-        let phase1 = make_phase(1, "par-phase-1", tasks1);
-        let phase2 = make_phase(2, "par-phase-2", tasks2);
-        let plan = make_plan_with_groups(
-            vec![phase1, phase2],
+        // --- Parallel run ---
+        let par_tasks1 = vec![make_task_spec("task-a", Some(claude.clone()))];
+        let par_tasks2 = vec![make_task_spec("task-b", Some(claude.clone()))];
+        let par_phase1 = make_phase(1, "par-phase-1", par_tasks1);
+        let par_phase2 = make_phase(2, "par-phase-2", par_tasks2);
+        let parallel_plan = make_plan_with_groups(
+            vec![par_phase1, par_phase2],
             vec![1, 2],
-            vec![vec![1, 2]],
+            vec![vec![1, 2]], // Both in same group -> concurrent
         );
 
-        let task_mock = Arc::new(MockBackend::new(vec![
-            Ok(mock_response(
-                &make_task_output_json("task-a", &claude, "src/a.rs"),
-                &claude,
-            )),
-            Ok(mock_response(
-                &make_task_output_json("task-b", &claude, "src/b.rs"),
-                &claude,
-            )),
-        ]));
-        let reviewer_mock = Arc::new(MockBackend::always_ok(&passing_verdict_json()));
+        let concurrent = Arc::new(AtomicU32::new(0));
+        let max_concurrent = Arc::new(AtomicU32::new(0));
 
-        let mut registry = AgentRegistry::new();
-        registry.register(claude.clone(), task_mock);
-        registry.register(gemini.clone(), reviewer_mock);
+        let par_task_mock = Arc::new(DelayedMockBackend::new(
+            MockBackend::always_ok(
+                &make_task_output_json("task-par", &claude, "src/par.rs"),
+            ),
+            std::time::Duration::from_millis(60),
+            Arc::clone(&concurrent),
+            Arc::clone(&max_concurrent),
+        ));
+        let par_reviewer = Arc::new(MockBackend::always_ok(&passing_verdict_json()));
 
-        let tmp = tempfile::tempdir().unwrap();
-        let coordinator = AgentCoordinator::new(registry, tmp.path().to_path_buf(), None);
+        let mut par_registry = AgentRegistry::new();
+        par_registry.register(claude.clone(), par_task_mock);
+        par_registry.register(gemini.clone(), par_reviewer);
 
-        let _result = coordinator.run_plan(&plan).await;
-        todo!("Wave 0 stub: parallel_faster_than_sequential -- must prove wall-clock time improvement over forced sequential");
+        let par_tmp = tempfile::tempdir().unwrap();
+        let par_coordinator =
+            AgentCoordinator::new(par_registry, par_tmp.path().to_path_buf(), None);
+
+        let par_start = tokio::time::Instant::now();
+        let par_result = par_coordinator.run_plan(&parallel_plan).await;
+        let par_elapsed = par_start.elapsed();
+        assert!(par_result.is_ok(), "parallel plan should succeed");
+
+        // --- Sequential run ---
+        let seq_tasks1 = vec![make_task_spec("task-a", Some(claude.clone()))];
+        let seq_tasks2 = vec![make_task_spec("task-b", Some(claude.clone()))];
+        let seq_phase1 = make_phase(1, "seq-phase-1", seq_tasks1);
+        let seq_phase2 = make_phase(2, "seq-phase-2", seq_tasks2);
+        let sequential_plan = make_plan_with_groups(
+            vec![seq_phase1, seq_phase2],
+            vec![1, 2],
+            vec![vec![1], vec![2]], // Separate groups -> sequential
+        );
+
+        let seq_concurrent = Arc::new(AtomicU32::new(0));
+        let seq_max_concurrent = Arc::new(AtomicU32::new(0));
+
+        let seq_task_mock = Arc::new(DelayedMockBackend::new(
+            MockBackend::always_ok(
+                &make_task_output_json("task-seq", &claude, "src/seq.rs"),
+            ),
+            std::time::Duration::from_millis(60),
+            Arc::clone(&seq_concurrent),
+            Arc::clone(&seq_max_concurrent),
+        ));
+        let seq_reviewer = Arc::new(MockBackend::always_ok(&passing_verdict_json()));
+
+        let mut seq_registry = AgentRegistry::new();
+        seq_registry.register(claude.clone(), seq_task_mock);
+        seq_registry.register(gemini.clone(), seq_reviewer);
+
+        let seq_tmp = tempfile::tempdir().unwrap();
+        let seq_coordinator =
+            AgentCoordinator::new(seq_registry, seq_tmp.path().to_path_buf(), None);
+
+        let seq_start = tokio::time::Instant::now();
+        let seq_result = seq_coordinator.run_plan(&sequential_plan).await;
+        let seq_elapsed = seq_start.elapsed();
+        assert!(seq_result.is_ok(), "sequential plan should succeed");
+
+        // Parallel should be faster than sequential
+        assert!(
+            par_elapsed < seq_elapsed,
+            "Parallel ({:?}) should be faster than sequential ({:?})",
+            par_elapsed,
+            seq_elapsed
+        );
     }
 
-    // ==================== Wave 0: parallel_isolation_blocks_conflict ====================
+    // ==================== Parallel: parallel_isolation_blocks_conflict ====================
 
     #[tokio::test]
     async fn parallel_isolation_blocks_conflict() {
@@ -907,6 +1034,8 @@ mod tests {
             vec![vec![1, 2]],
         );
 
+        // Use always_ok mocks -- they should never be called because
+        // isolation check runs before dispatch.
         let task_mock = Arc::new(MockBackend::always_ok(
             &make_task_output_json("unused", &claude, "src/conflict.rs"),
         ));
@@ -919,11 +1048,26 @@ mod tests {
         let tmp = tempfile::tempdir().unwrap();
         let coordinator = AgentCoordinator::new(registry, tmp.path().to_path_buf(), None);
 
-        let _result = coordinator.run_plan(&plan).await;
-        todo!("Wave 0 stub: parallel_isolation_blocks_conflict -- must return IsolationViolation error");
+        let result = coordinator.run_plan(&plan).await;
+        assert!(result.is_err(), "should fail with isolation violation");
+
+        let err = result.unwrap_err();
+        assert!(
+            matches!(err, PhaseRunnerError::IsolationViolation { .. }),
+            "Expected IsolationViolation, got {:?}",
+            err
+        );
+
+        // Verify the error message mentions the conflicting file
+        let msg = err.to_string();
+        assert!(
+            msg.contains("conflict.rs"),
+            "Error should mention the conflicting file, got: {}",
+            msg
+        );
     }
 
-    // ==================== Wave 0: parallel_commits_correct_metadata ====================
+    // ==================== Parallel: parallel_commits_correct_metadata ====================
 
     #[tokio::test]
     async fn parallel_commits_correct_metadata() {
@@ -967,7 +1111,24 @@ mod tests {
         let tmp = tempfile::tempdir().unwrap();
         let coordinator = AgentCoordinator::new(registry, tmp.path().to_path_buf(), None);
 
-        let _result = coordinator.run_plan(&plan).await;
-        todo!("Wave 0 stub: parallel_commits_correct_metadata -- must verify deterministic ordering and file output");
+        let result = coordinator.run_plan(&plan).await;
+        assert!(result.is_ok(), "parallel plan should succeed: {:?}", result.err());
+
+        let records = result.unwrap();
+        assert_eq!(records.len(), 2, "should have 2 phase records");
+
+        // Results must be sorted by phase_id (deterministic ordering)
+        assert_eq!(records[0].phase_name, "par-phase-1");
+        assert_eq!(records[1].phase_name, "par-phase-2");
+
+        // Both must have completed_at set
+        assert!(records[0].completed_at.is_some(), "phase-1 should have completed_at");
+        assert!(records[1].completed_at.is_some(), "phase-2 should have completed_at");
+
+        // Verify files from both phases exist in output_dir
+        let file_a = tmp.path().join("src/a.rs");
+        let file_b = tmp.path().join("src/b.rs");
+        assert!(file_a.exists(), "Expected file src/a.rs in output_dir");
+        assert!(file_b.exists(), "Expected file src/b.rs in output_dir");
     }
 }
