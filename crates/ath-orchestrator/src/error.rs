@@ -56,9 +56,10 @@ pub enum PhaseRunnerError {
     },
 
     /// Maximum retry attempts exhausted for a phase.
-    #[error("Phase '{phase_name}' exceeded max retries ({attempts} attempts): {final_reason}")]
+    #[error("Phase '{phase_name}' exceeded max retries after review by '{reviewer}' on attempt {attempts}: {final_reason}")]
     MaxRetriesExceeded {
         phase_name: String,
+        reviewer: String,
         attempts: u32,
         final_reason: String,
     },
@@ -202,12 +203,13 @@ mod tests {
     fn max_retries_exceeded_display() {
         let err = PhaseRunnerError::MaxRetriesExceeded {
             phase_name: "build-phase".into(),
+            reviewer: "Google/2.5-pro".into(),
             attempts: 3,
             final_reason: "tests still failing".into(),
         };
         assert_eq!(
             err.to_string(),
-            "Phase 'build-phase' exceeded max retries (3 attempts): tests still failing"
+            "Phase 'build-phase' exceeded max retries after review by 'Google/2.5-pro' on attempt 3: tests still failing"
         );
     }
 
@@ -257,6 +259,7 @@ mod tests {
             },
             PhaseRunnerError::MaxRetriesExceeded {
                 phase_name: "p".into(),
+                reviewer: "Google/2.5-pro".into(),
                 attempts: 3,
                 final_reason: "r".into(),
             },

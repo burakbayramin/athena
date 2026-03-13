@@ -9,25 +9,20 @@ use thiserror::Error;
 pub enum ValidationError {
     /// A required field is empty or missing.
     #[error("Required field '{field}' is empty")]
-    EmptyField {
-        field: String,
-        hint: String,
-    },
+    EmptyField { field: String, hint: String },
 
     /// A field has an invalid value.
     #[error("Invalid value for '{field}': {reason}")]
     InvalidValue {
         field: String,
         reason: String,
+        received: Option<String>,
         hint: String,
     },
 
     /// A circular dependency was detected in the phase DAG.
     #[error("Circular dependency detected: {cycle_path}")]
-    CircularDependency {
-        cycle_path: String,
-        hint: String,
-    },
+    CircularDependency { cycle_path: String, hint: String },
 
     /// A phase depends on a non-existent phase.
     #[error("Phase {phase_id} depends on non-existent phase {missing_id}")]
@@ -89,6 +84,17 @@ impl ValidationError {
         ValidationError::InvalidValue {
             field: field.into(),
             reason: reason.into(),
+            received: None,
+            hint: hint.into(),
+        }
+    }
+
+    /// Convenience constructor for invalid value errors with raw received content.
+    pub fn invalid_value_with_received(field: &str, reason: &str, received: &str, hint: &str) -> Self {
+        ValidationError::InvalidValue {
+            field: field.into(),
+            reason: reason.into(),
+            received: Some(received.into()),
             hint: hint.into(),
         }
     }
@@ -106,7 +112,11 @@ mod tests {
 
     #[test]
     fn hint_returns_fix_hint_for_invalid_value() {
-        let err = ValidationError::invalid_value("severity", "unknown level", "Use critical, warning, or info");
+        let err = ValidationError::invalid_value(
+            "severity",
+            "unknown level",
+            "Use critical, warning, or info",
+        );
         assert_eq!(err.hint(), "Use critical, warning, or info");
     }
 
@@ -118,8 +128,23 @@ mod tests {
 
     #[test]
     fn display_format_invalid_value() {
-        let err = ValidationError::invalid_value("age", "must be positive", "Use a positive number");
+        let err =
+            ValidationError::invalid_value("age", "must be positive", "Use a positive number");
         assert_eq!(err.to_string(), "Invalid value for 'age': must be positive");
+    }
+
+    #[test]
+    fn invalid_value_can_surface_received_content() {
+        let err = ValidationError::invalid_value_with_received(
+            "phase_id",
+            "must be an integer",
+            "\"abc\"",
+            "Use a numeric phase identifier",
+        );
+        assert_eq!(
+            err.to_string(),
+            "Invalid value for 'phase_id': must be an integer (received: \"abc\")"
+        );
     }
 
     #[test]
@@ -128,7 +153,10 @@ mod tests {
             cycle_path: "1 -> 2 -> 3 -> 1".into(),
             hint: "Remove one dependency edge to break the cycle".into(),
         };
-        assert_eq!(err.to_string(), "Circular dependency detected: 1 -> 2 -> 3 -> 1");
+        assert_eq!(
+            err.to_string(),
+            "Circular dependency detected: 1 -> 2 -> 3 -> 1"
+        );
         assert_eq!(err.hint(), "Remove one dependency edge to break the cycle");
     }
 
@@ -140,7 +168,10 @@ mod tests {
             hint: "Check that depends_on references valid phase IDs".into(),
         };
         assert_eq!(err.to_string(), "Phase 3 depends on non-existent phase 99");
-        assert_eq!(err.hint(), "Check that depends_on references valid phase IDs");
+        assert_eq!(
+            err.hint(),
+            "Check that depends_on references valid phase IDs"
+        );
     }
 
     #[test]

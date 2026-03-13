@@ -168,6 +168,23 @@ mod tests {
     }
 
     #[test]
+    fn auth_failed_hint_names_provider_specific_config_keys() {
+        let err = AgentError::AuthFailed {
+            provider: "Anthropic".into(),
+            reason: "invalid API key".into(),
+        };
+
+        assert!(
+            err.hint().contains("ANTHROPIC_API_KEY"),
+            "auth hint should name the env var"
+        );
+        assert!(
+            err.hint().contains("anthropic_api_key"),
+            "auth hint should name the config key"
+        );
+    }
+
+    #[test]
     fn error_display_actor_stopped() {
         let err = AgentError::ActorStopped;
         assert_eq!(format!("{err}"), "Agent actor has stopped");

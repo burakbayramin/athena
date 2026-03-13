@@ -99,26 +99,7 @@ fn render_subcommand_help(name: &str) -> String {
 /// - If the underlying error is a ConfigError, show the fix hint
 /// - If verbose mode was used, show the full error chain
 fn display_error(err: &anyhow::Error) {
-    eprintln!("{} {}", "Error:".red(), err);
-
-    // If the root cause is a ConfigError, show the fix hint.
-    if let Some(config_err) = err.downcast_ref::<ConfigError>() {
-        eprintln!("  {} {}", "Fix:".yellow(), config_err.hint());
-    }
-
-    // Show the error chain for debugging (verbose is implicit when there's a chain).
-    let err_ref: &(dyn std::error::Error + 'static) = err.as_ref();
-    let mut source = err_ref.source();
-    if source.is_some() {
-        eprintln!();
-        eprintln!("{}", "Caused by:".dimmed());
-        let mut i = 0;
-        while let Some(cause) = source {
-            eprintln!("  {i}: {cause}");
-            source = std::error::Error::source(cause);
-            i += 1;
-        }
-    }
+    eprint!("{}", render_error_output(err));
 }
 
 #[cfg(test)]
@@ -205,6 +186,67 @@ mod cli_surface {
         fn report_target_respects_explicit_target() {
             let target = report::resolve_target(Some("run-42"));
             assert_eq!(target, report::ReportTarget::Explicit("run-42".into()));
+        }
+    }
+}
+
+#[cfg(test)]
+mod error_display {
+    use super::*;
+
+    mod tests {
+        use super::*;
+
+        #[test]
+        fn provider_auth_errors_show_configuration_fix() {
+            let err = anyhow::Error::new(ath_agents::AgentError::AuthFailed {
+                provider: "Anthropic".into(),
+                reason: "invalid API key".into(),
+            });
+
+            let output = render_error_output(&err);
+            assert!(output.contains("Authentication failed for Anthropic"));
+            assert!(output.contains("ANTHROPIC_API_KEY"));
+            assert!(output.contains("anthropic_api_key"));
+        }
+
+        #[test]
+        fn review_failures_show_phase_reviewer_attempt_and_reason() {
+            let err = anyhow::Error::new(ath_orchestrator::error::PhaseRunnerError::MaxRetriesExceeded {
+                phase_name: "build-phase".into(),
+                reviewer: "Google/2.5-pro".into(),
+                attempts: 3,
+                final_reason: "tests still failing".into(),
+            });
+
+            let output = render_error_output(&err);
+            assert!(output.contains("build-phase"));
+            assert!(output.contains("Google/2.5-pro"));
+            assert!(output.contains("attempt 3"));
+            assert!(output.contains("tests still failing"));
+        }
+
+        #[test]
+        fn validation_errors_show_field_and_fix_guidance() {
+            let err = anyhow::Error::new(ath_types::ValidationError::invalid_value_with_received(
+                "phase_id",
+                "must be numeric",
+                "\"abc\"",
+                "Use an integer phase identifier",
+            ));
+
+            let output = render_error_output(&err);
+            assert!(output.contains("phase_id"));
+            assert!(output.contains("\"abc\""));
+            assert!(output.contains("Use an integer phase identifier"));
+        }
+
+        #[test]
+        fn config_error_fix_behavior_still_works() {
+            let err = anyhow::Error::new(ConfigError::NoConfigDir);
+            let output = render_error_output(&err);
+            assert!(output.contains("Could not determine config directory"));
+            assert!(output.contains("HOME"));
         }
     }
 }
