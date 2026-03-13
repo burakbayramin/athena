@@ -1,11 +1,47 @@
+//! Run-report types for persisted Athena execution artifacts.
+//!
+//! `RunReport` combines the routed execution plan with the completed phase
+//! records so report rendering does not need to re-run planning or execution.
+
+use chrono::{DateTime, Utc};
+use serde::{Deserialize, Serialize};
+
+use crate::phase::PhaseRecord;
+use crate::plan::ExecutionPlan;
+
+/// Aggregated usage totals for a saved run report.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
+pub struct RunTotals {
+    /// Total input tokens across the full run.
+    pub input_tokens: u64,
+    /// Total output tokens across the full run.
+    pub output_tokens: u64,
+    /// Total estimated cost in USD.
+    pub estimated_cost_usd: f64,
+}
+
+/// Persisted report artifact for a completed Athena run.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct RunReport {
+    /// Stable identifier for the saved run artifact.
+    pub run_id: String,
+    /// When the report artifact was written.
+    pub generated_at: DateTime<Utc>,
+    /// Routed execution plan used for the run.
+    pub plan: ExecutionPlan,
+    /// Completed phase records from execution.
+    pub phase_records: Vec<PhaseRecord>,
+    /// Aggregated totals across the run.
+    pub totals: RunTotals,
+}
+
 #[cfg(test)]
 mod tests {
-    use chrono::Utc;
+    use super::*;
     use uuid::Uuid;
 
     use crate::agent::AgentKind;
-    use crate::phase::{AgentContribution, PhaseRecord, TokenUsage};
-    use crate::plan::ExecutionPlan;
+    use crate::phase::{AgentContribution, TokenUsage};
 
     #[test]
     fn run_report_round_trip() {
@@ -43,5 +79,17 @@ mod tests {
 
         assert_eq!(deserialized.phase_records[0].phase_id, 7);
         assert_eq!(report, deserialized);
+    }
+
+    #[test]
+    fn run_totals_default_to_zero() {
+        assert_eq!(
+            RunTotals::default(),
+            RunTotals {
+                input_tokens: 0,
+                output_tokens: 0,
+                estimated_cost_usd: 0.0,
+            }
+        );
     }
 }

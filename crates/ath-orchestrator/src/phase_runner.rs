@@ -830,6 +830,7 @@ pub async fn run_phase_with_progress(
 
             return Ok(PhaseRecord {
                 id: uuid::Uuid::new_v4(),
+                phase_id: phase.id,
                 phase_name: phase.name.clone(),
                 started_at,
                 completed_at: Some(chrono::Utc::now()),
