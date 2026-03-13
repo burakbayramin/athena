@@ -48,6 +48,8 @@ pub struct ReviewAttempt {
 pub struct PhaseRecord {
     /// Unique identifier for this phase execution.
     pub id: Uuid,
+    /// Stable phase identifier from the routed execution plan.
+    pub phase_id: u32,
     /// Name of the phase.
     pub phase_name: String,
     /// When the phase started.
@@ -70,6 +72,7 @@ mod tests {
     fn phase_record_round_trip() {
         let record = PhaseRecord {
             id: Uuid::new_v4(),
+            phase_id: 1,
             phase_name: "foundation".into(),
             started_at: Utc::now(),
             completed_at: Some(Utc::now()),
@@ -144,6 +147,7 @@ mod tests {
     fn phase_record_with_no_completion() {
         let record = PhaseRecord {
             id: Uuid::new_v4(),
+            phase_id: 2,
             phase_name: "analysis".into(),
             started_at: Utc::now(),
             completed_at: None,
