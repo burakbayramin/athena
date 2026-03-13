@@ -26,14 +26,11 @@ Intelligent phase analysis — breaking any software project into well-structure
 - ✓ Dry-run mode to preview plan without execution — v1.0 (M001)
 - ✓ Parallel execution of independent phases via tokio JoinSet — v1.0 (M001)
 - ✓ Actionable error messages distinguishing API errors, review failures, and schema violations — v1.0 (M001)
-
-### Active
-
-- Memory persistence across runs in `.ath/memory/` filesystem structure — M002
-- Automatic context injection from prior runs into agent prompts — M002
-- CLI inspection, search, and manual memory entry — M002
-- Token budget enforcement for injected context — M002
-- Keyword fallback when no embedding API is available — M002
+- ✓ Memory persistence across runs in `.ath/memory/` filesystem structure — M002
+- ✓ Automatic context injection from prior runs into agent prompts — M002
+- ✓ CLI inspection, search, and manual memory entry — M002
+- ✓ Token budget enforcement for injected context — M002
+- ✓ Keyword fallback when no embedding API is available — M002
 
 ### Out of Scope
 
@@ -50,6 +47,7 @@ Intelligent phase analysis — breaking any software project into well-structure
 
 Shipped v1.0 MVP with 16,315 lines of Rust across 7 crates (58 source files, 415 tests).
 Milestone M001 (Migration) completed 2026-03-13 — all 10 slices delivered, all 14 requirements validated.
+Milestone M002 (Memory Layer) completed 2026-03-14 — all 6 slices delivered, 5 requirements validated. 588 tests passing.
 Tech stack: Rust, tokio, clap, git2, genai, backon.
 Three AI backends: Anthropic (Claude), Google (Gemini), OpenAI (Codex/Copilot).
 Module isolation with strict file ownership prevents agent conflicts.
@@ -82,7 +80,7 @@ Durable run reports persisted at `.ath/runs/<run-id>/report.json` with cost esti
 | ID | Name | Status | Completed |
 |----|------|--------|-----------|
 | M001 | Migration | ✅ Complete | 2026-03-13 |
-| M002 | Memory Layer | 🔄 In Progress | — |
+| M002 | Memory Layer | ✅ Complete | 2026-03-14 |
 
 ---
-*Last updated: 2026-03-14 — M002/S05 (CLI & Config) complete*
+*Last updated: 2026-03-14 — M002 (Memory Layer) complete*

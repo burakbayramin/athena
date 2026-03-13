@@ -64,7 +64,7 @@ This milestone is complete only when all are true:
 - [x] **S05: CLI & Config** `risk:low` `depends:[S01,S02,S03]`
   > After this: `ath memory tree|search|read|add|stats|gc` subcommands work, memory config is loaded from `.ath/memory/config.toml` — proven by CLI integration tests
 
-- [ ] **S06: End-to-End Integration** `risk:medium` `depends:[S04,S05]`
+- [x] **S06: End-to-End Integration** `risk:medium` `depends:[S04,S05]`
   > After this: Full two-run scenario works — first run captures observations and extracts memory, second run's agent prompts contain injected context, CLI commands show accumulated memory — proven by end-to-end integration test
 
 ## Boundary Map
