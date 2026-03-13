@@ -10,14 +10,34 @@ use crate::phase::PhaseRecord;
 use crate::plan::ExecutionPlan;
 
 /// Aggregated usage totals for a saved run report.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
-pub struct RunTotals {
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct ReportTotals {
     /// Total input tokens across the full run.
     pub input_tokens: u64,
     /// Total output tokens across the full run.
     pub output_tokens: u64,
     /// Total estimated cost in USD.
-    pub estimated_cost_usd: f64,
+    pub estimated_cost_usd: Option<f64>,
+}
+
+/// Usage totals for one agent inside a saved phase summary.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct AgentTotals {
+    pub agent: crate::agent::AgentKind,
+    pub input_tokens: u64,
+    pub output_tokens: u64,
+    pub estimated_cost_usd: Option<f64>,
+    pub files_produced: Vec<String>,
+}
+
+/// Aggregated usage summary for one completed phase.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct PhaseSummary {
+    pub phase_id: u32,
+    pub phase_name: String,
+    pub review_attempts: u32,
+    pub totals: ReportTotals,
+    pub agent_totals: Vec<AgentTotals>,
 }
 
 /// Persisted report artifact for a completed Athena run.
@@ -31,8 +51,10 @@ pub struct RunReport {
     pub plan: ExecutionPlan,
     /// Completed phase records from execution.
     pub phase_records: Vec<PhaseRecord>,
+    /// Aggregated phase summaries for report rendering.
+    pub phase_summaries: Vec<PhaseSummary>,
     /// Aggregated totals across the run.
-    pub totals: RunTotals,
+    pub totals: ReportTotals,
 }
 
 #[cfg(test)]
@@ -71,7 +93,24 @@ mod tests {
                 }],
                 review_attempts: vec![],
             }],
-            totals: RunTotals::default(),
+            phase_summaries: vec![PhaseSummary {
+                phase_id: 7,
+                phase_name: "foundation".into(),
+                review_attempts: 0,
+                totals: ReportTotals {
+                    input_tokens: 10,
+                    output_tokens: 5,
+                    estimated_cost_usd: Some(0.42),
+                },
+                agent_totals: vec![AgentTotals {
+                    agent: AgentKind::Claude("opus-4".into()),
+                    input_tokens: 10,
+                    output_tokens: 5,
+                    estimated_cost_usd: Some(0.42),
+                    files_produced: vec!["src/lib.rs".into()],
+                }],
+            }],
+            totals: ReportTotals::default(),
         };
 
         let json = serde_json::to_string(&report).expect("serialize");
@@ -84,11 +123,11 @@ mod tests {
     #[test]
     fn run_totals_default_to_zero() {
         assert_eq!(
-            RunTotals::default(),
-            RunTotals {
+            ReportTotals::default(),
+            ReportTotals {
                 input_tokens: 0,
                 output_tokens: 0,
-                estimated_cost_usd: 0.0,
+                estimated_cost_usd: Some(0.0),
             }
         );
     }

@@ -227,6 +227,48 @@ mod tests {
         assert!(output.contains("Review attempts: 1"));
     }
 
+    #[test]
+    fn computes_per_phase_and_run_costs() {
+        let report = build_run_report(
+            &sample_report("run-9").plan,
+            &sample_report("run-9").phase_records,
+        );
+
+        assert_eq!(report.phase_summaries.len(), 1);
+        assert_eq!(report.phase_summaries[0].totals.input_tokens, 125);
+        assert_eq!(report.phase_summaries[0].totals.output_tokens, 50);
+        assert!(report.phase_summaries[0].totals.estimated_cost_usd.is_some());
+        assert_eq!(
+            report.phase_summaries[0].agent_totals[0].estimated_cost_usd,
+            Some(0.001)
+        );
+        assert!(report.totals.estimated_cost_usd.is_some());
+    }
+
+    #[test]
+    fn render_report_surfaces_phase_and_run_usage_totals() {
+        let output = render_report(&sample_report("run-9"));
+
+        assert!(output.contains("Phase 1: foundation"));
+        assert!(output.contains("Input tokens: 125"));
+        assert!(output.contains("Output tokens: 50"));
+        assert!(output.contains("Estimated cost:"));
+        assert!(output.contains("Anthropic/opus-4"));
+        assert!(output.contains("Total estimated cost:"));
+    }
+
+    #[test]
+    fn render_report_marks_unknown_pricing_as_not_available() {
+        let mut report = sample_report("run-unknown");
+        report.phase_records[0].contributions[0].agent =
+            ath_types::agent::AgentKind::Codex("unknown-model".into());
+
+        let built = build_run_report(&report.plan, &report.phase_records);
+        let output = render_report(&built);
+
+        assert!(output.contains("n/a"));
+    }
+
     fn sample_report(run_id: &str) -> RunReport {
         RunReport {
             run_id: run_id.into(),
@@ -243,7 +285,15 @@ mod tests {
                 phase_name: "foundation".into(),
                 started_at: chrono::Utc::now(),
                 completed_at: Some(chrono::Utc::now()),
-                contributions: vec![],
+                contributions: vec![ath_types::phase::AgentContribution {
+                    agent: ath_types::agent::AgentKind::Claude("opus-4".into()),
+                    tokens: ath_types::phase::TokenUsage {
+                        input_tokens: 100,
+                        output_tokens: 20,
+                        estimated_cost_usd: 0.0,
+                    },
+                    files_produced: vec!["src/lib.rs".into()],
+                }],
                 review_attempts: vec![ath_types::phase::ReviewAttempt {
                     attempt_number: 1,
                     verdict: ReviewVerdict {
@@ -253,11 +303,16 @@ mod tests {
                         reason: "Looks good".into(),
                         suggestions: vec![],
                     },
-                    tokens: ath_types::phase::TokenUsage::default(),
+                    tokens: ath_types::phase::TokenUsage {
+                        input_tokens: 25,
+                        output_tokens: 30,
+                        estimated_cost_usd: 0.0,
+                    },
                     timestamp: chrono::Utc::now(),
                 }],
             }],
-            totals: ath_types::report::RunTotals::default(),
+            phase_summaries: vec![],
+            totals: ath_types::report::ReportTotals::default(),
         }
     }
 }
