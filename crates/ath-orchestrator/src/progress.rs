@@ -169,10 +169,12 @@ mod tests {
     }
 
     fn make_plan(phases: Vec<PhaseSpec>, execution_order: Vec<u32>) -> ExecutionPlan {
+        let parallel_groups: Vec<Vec<u32>> =
+            execution_order.iter().map(|&id| vec![id]).collect();
         ExecutionPlan {
             phases,
             execution_order,
-            parallel_groups: vec![],
+            parallel_groups,
             critical_path_length: 0,
         }
     }
