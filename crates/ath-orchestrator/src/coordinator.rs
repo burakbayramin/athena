@@ -602,4 +602,194 @@ mod tests {
         assert!(msg.contains("failing-phase"), "error should contain phase name");
         assert!(msg.contains("3"), "error should contain attempt count");
     }
+
+    // ==================== Wave 0: Parallel execution helpers ====================
+
+    fn make_plan_with_groups(
+        phases: Vec<PhaseSpec>,
+        execution_order: Vec<u32>,
+        parallel_groups: Vec<Vec<u32>>,
+    ) -> ExecutionPlan {
+        ExecutionPlan {
+            phases,
+            execution_order,
+            parallel_groups,
+            critical_path_length: 0,
+        }
+    }
+
+    fn make_task_spec_with_files(name: &str, agent: Option<AgentKind>, files: Vec<&str>) -> TaskSpec {
+        let mut spec = make_task_spec(name, agent);
+        spec.expected_output_files = files.into_iter().map(String::from).collect();
+        spec
+    }
+
+    // ==================== Wave 0: parallel_phases_overlap ====================
+
+    #[tokio::test]
+    async fn parallel_phases_overlap() {
+        let claude = AgentKind::Claude("opus-4".into());
+        let gemini = AgentKind::Gemini("2.5-pro".into());
+
+        let tasks1 = vec![make_task_spec("task-a", Some(claude.clone()))];
+        let tasks2 = vec![make_task_spec("task-b", Some(claude.clone()))];
+        let phase1 = make_phase(1, "par-phase-1", tasks1);
+        let phase2 = make_phase(2, "par-phase-2", tasks2);
+        let plan = make_plan_with_groups(
+            vec![phase1, phase2],
+            vec![1, 2],
+            vec![vec![1, 2]],
+        );
+
+        let task_mock = Arc::new(MockBackend::new(vec![
+            Ok(mock_response(
+                &make_task_output_json("task-a", &claude, "src/a.rs"),
+                &claude,
+            )),
+            Ok(mock_response(
+                &make_task_output_json("task-b", &claude, "src/b.rs"),
+                &claude,
+            )),
+        ]));
+        let reviewer_mock = Arc::new(MockBackend::always_ok(&passing_verdict_json()));
+
+        let mut registry = AgentRegistry::new();
+        registry.register(claude.clone(), task_mock);
+        registry.register(gemini.clone(), reviewer_mock);
+
+        let tmp = tempfile::tempdir().unwrap();
+        let coordinator = AgentCoordinator::new(registry, tmp.path().to_path_buf(), None);
+
+        let _result = coordinator.run_plan(&plan).await;
+        todo!("Wave 0 stub: parallel_phases_overlap -- must prove concurrent execution overlap via timing or concurrency counter");
+    }
+
+    // ==================== Wave 0: parallel_faster_than_sequential ====================
+
+    #[tokio::test]
+    async fn parallel_faster_than_sequential() {
+        let claude = AgentKind::Claude("opus-4".into());
+        let gemini = AgentKind::Gemini("2.5-pro".into());
+
+        let tasks1 = vec![make_task_spec("task-a", Some(claude.clone()))];
+        let tasks2 = vec![make_task_spec("task-b", Some(claude.clone()))];
+        let phase1 = make_phase(1, "par-phase-1", tasks1);
+        let phase2 = make_phase(2, "par-phase-2", tasks2);
+        let plan = make_plan_with_groups(
+            vec![phase1, phase2],
+            vec![1, 2],
+            vec![vec![1, 2]],
+        );
+
+        let task_mock = Arc::new(MockBackend::new(vec![
+            Ok(mock_response(
+                &make_task_output_json("task-a", &claude, "src/a.rs"),
+                &claude,
+            )),
+            Ok(mock_response(
+                &make_task_output_json("task-b", &claude, "src/b.rs"),
+                &claude,
+            )),
+        ]));
+        let reviewer_mock = Arc::new(MockBackend::always_ok(&passing_verdict_json()));
+
+        let mut registry = AgentRegistry::new();
+        registry.register(claude.clone(), task_mock);
+        registry.register(gemini.clone(), reviewer_mock);
+
+        let tmp = tempfile::tempdir().unwrap();
+        let coordinator = AgentCoordinator::new(registry, tmp.path().to_path_buf(), None);
+
+        let _result = coordinator.run_plan(&plan).await;
+        todo!("Wave 0 stub: parallel_faster_than_sequential -- must prove wall-clock time improvement over forced sequential");
+    }
+
+    // ==================== Wave 0: parallel_isolation_blocks_conflict ====================
+
+    #[tokio::test]
+    async fn parallel_isolation_blocks_conflict() {
+        let claude = AgentKind::Claude("opus-4".into());
+        let gemini = AgentKind::Gemini("2.5-pro".into());
+
+        let tasks1 = vec![make_task_spec_with_files(
+            "task-a",
+            Some(claude.clone()),
+            vec!["src/conflict.rs"],
+        )];
+        let tasks2 = vec![make_task_spec_with_files(
+            "task-b",
+            Some(claude.clone()),
+            vec!["src/conflict.rs"],
+        )];
+        let phase1 = make_phase(1, "par-phase-1", tasks1);
+        let phase2 = make_phase(2, "par-phase-2", tasks2);
+        let plan = make_plan_with_groups(
+            vec![phase1, phase2],
+            vec![1, 2],
+            vec![vec![1, 2]],
+        );
+
+        let task_mock = Arc::new(MockBackend::always_ok(
+            &make_task_output_json("unused", &claude, "src/conflict.rs"),
+        ));
+        let reviewer_mock = Arc::new(MockBackend::always_ok(&passing_verdict_json()));
+
+        let mut registry = AgentRegistry::new();
+        registry.register(claude.clone(), task_mock);
+        registry.register(gemini.clone(), reviewer_mock);
+
+        let tmp = tempfile::tempdir().unwrap();
+        let coordinator = AgentCoordinator::new(registry, tmp.path().to_path_buf(), None);
+
+        let _result = coordinator.run_plan(&plan).await;
+        todo!("Wave 0 stub: parallel_isolation_blocks_conflict -- must return IsolationViolation error");
+    }
+
+    // ==================== Wave 0: parallel_commits_correct_metadata ====================
+
+    #[tokio::test]
+    async fn parallel_commits_correct_metadata() {
+        let claude = AgentKind::Claude("opus-4".into());
+        let gemini = AgentKind::Gemini("2.5-pro".into());
+
+        let tasks1 = vec![make_task_spec_with_files(
+            "task-a",
+            Some(claude.clone()),
+            vec!["src/a.rs"],
+        )];
+        let tasks2 = vec![make_task_spec_with_files(
+            "task-b",
+            Some(claude.clone()),
+            vec!["src/b.rs"],
+        )];
+        let phase1 = make_phase(1, "par-phase-1", tasks1);
+        let phase2 = make_phase(2, "par-phase-2", tasks2);
+        let plan = make_plan_with_groups(
+            vec![phase1, phase2],
+            vec![1, 2],
+            vec![vec![1, 2]],
+        );
+
+        let task_mock = Arc::new(MockBackend::new(vec![
+            Ok(mock_response(
+                &make_task_output_json("task-a", &claude, "src/a.rs"),
+                &claude,
+            )),
+            Ok(mock_response(
+                &make_task_output_json("task-b", &claude, "src/b.rs"),
+                &claude,
+            )),
+        ]));
+        let reviewer_mock = Arc::new(MockBackend::always_ok(&passing_verdict_json()));
+
+        let mut registry = AgentRegistry::new();
+        registry.register(claude.clone(), task_mock);
+        registry.register(gemini.clone(), reviewer_mock);
+
+        let tmp = tempfile::tempdir().unwrap();
+        let coordinator = AgentCoordinator::new(registry, tmp.path().to_path_buf(), None);
+
+        let _result = coordinator.run_plan(&plan).await;
+        todo!("Wave 0 stub: parallel_commits_correct_metadata -- must verify deterministic ordering and file output");
+    }
 }
