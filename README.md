@@ -1,7 +1,3 @@
-# Athena
-
-Multi-agent AI orchestrator — takes a project idea and builds it by coordinating AI agents working in parallel.
-
 ## Install
 
 **Requires:** [Rust toolchain](https://rustup.rs/) (1.75+)
