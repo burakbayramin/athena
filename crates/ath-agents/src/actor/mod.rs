@@ -95,8 +95,9 @@ pub fn classify_error(err: genai::Error, provider: &str) -> AgentError {
 /// Classify a webc (HTTP) error into our AgentError.
 fn classify_webc_error(err: &genai::webc::Error, provider: &str) -> AgentError {
     match err {
-        genai::webc::Error::ResponseFailedStatus { status, .. } => {
+        genai::webc::Error::ResponseFailedStatus { status, body, .. } => {
             let code = status.as_u16();
+            eprintln!("[{provider}] HTTP {code}: {body}");
             match code {
                 429 => AgentError::RateLimit {
                     provider: provider.to_string(),
@@ -118,7 +119,13 @@ fn classify_webc_error(err: &genai::webc::Error, provider: &str) -> AgentError {
                 },
                 _ => AgentError::Unknown {
                     provider: provider.to_string(),
-                    message: format!("HTTP {code}"),
+                    message: if body.is_empty() {
+                        format!("HTTP {code}")
+                    } else {
+                        // Truncate body to avoid spamming logs
+                        let truncated = if body.len() > 500 { &body[..500] } else { body };
+                        format!("HTTP {code}: {truncated}")
+                    },
                 },
             }
         }

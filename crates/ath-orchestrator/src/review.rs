@@ -85,9 +85,23 @@ pub fn select_reviewer(
         }
     }
 
+    // Fallback: if only one agent is available, allow self-review.
+    // Better to have the same agent review its own work than to block execution.
+    if let Some(provider) = majority_provider {
+        let self_reviewer = task_agents
+            .iter()
+            .find(|a| a.provider() == provider)
+            .cloned();
+        if let Some(agent) = self_reviewer {
+            if available(&agent) {
+                return Ok(agent);
+            }
+        }
+    }
+
     Err(ReviewError::NoReviewerAvailable {
         phase_name: phase_name.into(),
-        reason: "all non-author agents are unavailable".into(),
+        reason: "all agents are unavailable".into(),
     })
 }
 

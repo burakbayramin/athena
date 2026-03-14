@@ -310,7 +310,12 @@ pub(crate) fn assign_agents_and_check_isolation_with_skills(
         assign_all_tasks(phase, &table, available).map_err(|e| anyhow!("{e}"))?;
     }
 
-    check_isolation(plan).map_err(|e| anyhow!("{e}"))?;
+    if let Err(e) = check_isolation(plan) {
+        eprintln!(
+            "{}",
+            colored::Colorize::yellow(&*format!("Warning: isolation check: {e}"))
+        );
+    }
 
     Ok(())
 }

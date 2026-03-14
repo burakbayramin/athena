@@ -76,12 +76,10 @@ impl AgentCoordinator {
         observer: Option<SharedProgressObserver>,
         checkpoint_path: Option<&Path>,
     ) -> Result<Vec<PhaseRecord>, PhaseRunnerError> {
-        // Pre-dispatch: validate isolation across all parallel groups
-        crate::isolation::check_isolation(plan).map_err(|e| {
-            PhaseRunnerError::IsolationViolation {
-                details: e.to_string(),
-            }
-        })?;
+        // Pre-dispatch: warn on isolation conflicts (non-fatal)
+        if let Err(e) = crate::isolation::check_isolation(plan) {
+            eprintln!("Warning: {e}");
+        }
 
         let commit_gate = Arc::new(AsyncMutex::new(()));
         let total_phases = plan.execution_order.len();

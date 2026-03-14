@@ -35,13 +35,16 @@ pub fn route_task(
     table: &HashMap<String, AgentId>,
     available: impl Fn(&AgentId) -> bool,
 ) -> Result<RoutingDecision, IsolationError> {
-    // Empty tags -> default
+    // Empty tags -> default (with availability check)
     if skill_tags.is_empty() {
         let agent = taxonomy::default_agent();
-        return Ok(RoutingDecision {
-            agent,
-            rationale: "No skill tags; defaulting to Claude".into(),
-        });
+        if available(&agent) {
+            return Ok(RoutingDecision {
+                agent,
+                rationale: "No skill tags; using default agent".into(),
+            });
+        }
+        // Default unavailable — fall through to find any available agent
     }
 
     // Count votes by provider
@@ -60,13 +63,16 @@ pub fn route_task(
         }
     }
 
-    // No tags matched -> default
+    // No tags matched -> default (with availability check)
     if !any_match {
         let agent = taxonomy::default_agent();
-        return Ok(RoutingDecision {
-            agent,
-            rationale: "No matching skill tags; defaulting to Claude".into(),
-        });
+        if available(&agent) {
+            return Ok(RoutingDecision {
+                agent,
+                rationale: "No matching skill tags; using default agent".into(),
+            });
+        }
+        // Default unavailable — fall through to fallback search
     }
 
     // Sort candidates: highest votes first, then lowest priority (tiebreak)
@@ -123,6 +129,22 @@ pub fn route_task(
                 tag_strs.join(", "),
             ),
         });
+    }
+
+    // All matched/default candidates unavailable — try any agent in the routing
+    // table that IS available (generic fallback to whatever is configured).
+    let all_agents: Vec<AgentId> = table.values().cloned().collect();
+    for agent in &all_agents {
+        if available(agent) {
+            return Ok(RoutingDecision {
+                agent: agent.clone(),
+                rationale: format!(
+                    "Tags [{}] -> preferred agents unavailable; falling back to {}",
+                    tag_strs.join(", "),
+                    agent.provider_name(),
+                ),
+            });
+        }
     }
 
     // Truly all unavailable
