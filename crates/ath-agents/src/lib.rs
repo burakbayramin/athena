@@ -15,6 +15,7 @@ pub mod mock;
 pub use actor::claude::ClaudeHandle;
 pub use actor::codex::CodexHandle;
 pub use actor::gemini::GeminiHandle;
+pub use actor::generic::{GenericHandle, GenericHandleConfig};
 pub use backend::AgentBackend;
 pub use circuit_breaker::CircuitBreaker;
 pub use error::AgentError;

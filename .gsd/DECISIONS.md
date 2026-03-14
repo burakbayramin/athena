@@ -38,3 +38,5 @@
 | D032 | Custom providers skip with warning in `build_backend_for_agent` | Unknown providers not yet supported — deferred to S04 (generic OpenAI provider). Warning printed to stderr, agent skipped, no crash. | 2026-03-14 |
 | D033 | Skills config routes override defaults, don't replace entire table | Unspecified tags keep hardcoded routing. Config is additive/override, not a full replacement. Reduces required config for minor tweaks. | 2026-03-14 |
 | D034 | Route tags normalized to lowercase in `SkillsConfig::parse()` | Case-insensitive matching — "Rust" and "rust" route to the same agent. Consistent with taxonomy's lowercase convention. | 2026-03-14 |
+| D035 | Custom `base_url` uses OpenAI adapter kind via `ServiceTargetResolver` | All OpenAI-compatible endpoints (Ollama, Groq, Together) share the same chat completions protocol. Single adapter handles all. | 2026-03-14 |
+| D036 | `GenericHandle` accepts optional API key | Ollama and other local models don't require auth. `api_key: None` skips the auth resolver entirely. | 2026-03-14 |

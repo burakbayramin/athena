@@ -8,6 +8,7 @@
 pub mod claude;
 pub mod codex;
 pub mod gemini;
+pub mod generic;
 
 use std::time::Duration;
 
@@ -26,6 +27,7 @@ use crate::error::AgentError;
 pub use claude::ClaudeHandle;
 pub use codex::CodexHandle;
 pub use gemini::GeminiHandle;
+pub use generic::{GenericHandle, GenericHandleConfig};
 
 /// Message sent from a handle to its actor via the mpsc channel.
 pub struct ActorMessage {

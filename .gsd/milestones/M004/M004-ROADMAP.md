@@ -62,7 +62,7 @@ This milestone is complete only when all are true:
 - [x] **S03: Configurable Skill Routing** `risk:medium` `depends:[S01]`
   > After this: skill→agent mapping loaded from `.ath/skills.toml`, falls back to defaults when absent — proven by unit tests for config parsing and routing with custom skills
 
-- [ ] **S04: Generic OpenAI Provider** `risk:medium` `depends:[S01,S02]`
+- [x] **S04: Generic OpenAI Provider** `risk:medium` `depends:[S01,S02]`
   > After this: a generic OpenAI-compatible provider sends requests to any base_url (Ollama, Groq, etc.) — proven by unit test with mock HTTP server
 
 - [ ] **S05: CLI & End-to-End Integration** `risk:low` `depends:[S01,S02,S03,S04]`

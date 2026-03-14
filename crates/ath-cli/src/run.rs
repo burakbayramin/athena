@@ -2,7 +2,7 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use anyhow::{anyhow, Result};
-use ath_agents::{AgentBackend, ClaudeHandle, CodexHandle, GeminiHandle};
+use ath_agents::{AgentBackend, ClaudeHandle, CodexHandle, GeminiHandle, GenericHandle, GenericHandleConfig};
 use ath_config::ConfigStore;
 use ath_orchestrator::coordinator::AgentCoordinator;
 use ath_orchestrator::isolation::check_isolation;
@@ -239,11 +239,16 @@ fn build_backend_for_agent(
             let handle = CodexHandle::new(config).map_err(|e| anyhow!("{e}"))?;
             Ok(Some(Arc::new(handle)))
         }
-        provider => {
-            // Custom providers will be handled in S04 (generic OpenAI provider)
-            eprintln!("Warning: provider '{}' is not yet supported, skipping agent {}/{}", 
-                provider, agent_cfg.provider, agent_cfg.model);
-            Ok(None)
+        _ => {
+            // Generic OpenAI-compatible provider (Ollama, Groq, Together, etc.)
+            let handle = GenericHandle::new(GenericHandleConfig {
+                provider: agent_cfg.provider.clone(),
+                model: agent_cfg.model.clone(),
+                api_key: agent_cfg.resolve_api_key(),
+                base_url: agent_cfg.base_url.clone(),
+            })
+            .map_err(|e| anyhow!("{e}"))?;
+            Ok(Some(Arc::new(handle)))
         }
     }
 }
