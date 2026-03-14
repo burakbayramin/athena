@@ -24,6 +24,7 @@ pub mod observe;
 pub mod store;
 pub mod types;
 pub mod uri;
+pub mod vector;
 
 // Re-export primary types at crate root for convenience.
 pub use config::{GcConfig, MemoryConfig};
@@ -41,3 +42,4 @@ pub use extract::{
 };
 pub use inject::{ContextInjector, InjectedContext, InjectionConfig};
 pub use uri::VikingUri;
+pub use vector::VectorIndex;

@@ -3,6 +3,7 @@
 use crate::keyword::KeywordIndex;
 use crate::store::VikingStore;
 use crate::uri::VikingUri;
+use crate::vector::VectorIndex;
 
 /// Per-section token budget configuration for context injection.
 ///
@@ -60,6 +61,12 @@ impl InjectedContext {
 pub struct ContextInjector<'a> {
     store: &'a VikingStore,
     keyword_index: &'a KeywordIndex,
+    /// Optional vector index for embedding-based search.
+    /// When present with a query embedding, vector search takes priority.
+    vector_index: Option<&'a VectorIndex>,
+    /// Optional query embedding for vector search.
+    /// Provided by the caller (who handles the embedding API call).
+    query_embedding: Option<Vec<f32>>,
 }
 
 impl<'a> ContextInjector<'a> {
@@ -68,7 +75,23 @@ impl<'a> ContextInjector<'a> {
         Self {
             store,
             keyword_index,
+            vector_index: None,
+            query_embedding: None,
         }
+    }
+
+    /// Attach a vector index and pre-computed query embedding for semantic search.
+    ///
+    /// When both are set, `build_context` prefers vector search results over
+    /// keyword search. Falls back to keywords if vector search returns nothing.
+    pub fn with_vector_search(
+        mut self,
+        vector_index: &'a VectorIndex,
+        query_embedding: Vec<f32>,
+    ) -> Self {
+        self.vector_index = Some(vector_index);
+        self.query_embedding = Some(query_embedding);
+        self
     }
 
     /// Build a budget-constrained context string for an agent prompt.
@@ -256,8 +279,29 @@ impl<'a> ContextInjector<'a> {
             return None;
         }
 
-        let hits = self.keyword_index.search(query, 10);
-        if hits.is_empty() {
+        // Prefer vector search when available, fall back to keyword
+        let hit_uris: Vec<String> =
+            if let (Some(vi), Some(qe)) = (&self.vector_index, &self.query_embedding) {
+                let vector_hits = vi.search(qe, 10);
+                if vector_hits.is_empty() {
+                    // Fall back to keyword search
+                    self.keyword_index
+                        .search(query, 10)
+                        .into_iter()
+                        .map(|h| h.uri_str)
+                        .collect()
+                } else {
+                    vector_hits.into_iter().map(|(uri, _score)| uri).collect()
+                }
+            } else {
+                self.keyword_index
+                    .search(query, 10)
+                    .into_iter()
+                    .map(|h| h.uri_str)
+                    .collect()
+            };
+
+        if hit_uris.is_empty() {
             return None;
         }
 
@@ -265,12 +309,12 @@ impl<'a> ContextInjector<'a> {
         let mut parts: Vec<String> = Vec::new();
         let mut tokens_used: usize = 0;
 
-        for hit in &hits {
+        for uri_str in &hit_uris {
             if tokens_used >= effective_budget {
                 break;
             }
 
-            let uri: VikingUri = match hit.uri_str.parse() {
+            let uri: VikingUri = match uri_str.parse() {
                 Ok(u) => u,
                 Err(_) => continue,
             };
@@ -297,15 +341,15 @@ impl<'a> ContextInjector<'a> {
                     }
 
                     parts.push(format!(
-                        "[{}] (relevance: {:.2}): {}",
-                        hit.uri_str, hit.score, entry_truncated
+                        "[{}]: {}",
+                        uri_str, entry_truncated
                     ));
                     tokens_used += entry_tokens;
                 }
                 Ok(None) => continue,
                 Err(e) => {
                     tracing::warn!(
-                        uri = %hit.uri_str,
+                        uri = %uri_str,
                         error = %e,
                         "Context section skipped: semantic result read failed"
                     );
@@ -791,5 +835,75 @@ mod tests {
         assert!(result.sections_included.contains(&"recent_run".to_string()));
         // Should pick run002 (last sorted)
         assert!(result.text.contains("Second run"));
+    }
+
+    #[test]
+    fn vector_search_preferred_over_keyword_when_available() {
+        let (_dir, store, mut keyword_index) = setup_empty();
+        let mut vector_index = VectorIndex::new();
+
+        // Write two entries — keyword matches "auth", vector matches "login"
+        write_entry(
+            &store,
+            &mut keyword_index,
+            "viking://project/decisions/auth",
+            "Authentication uses JWT tokens.",
+            "JWT-based auth flow.",
+        );
+        write_entry(
+            &store,
+            &mut keyword_index,
+            "viking://project/decisions/logging",
+            "Structured logging with tracing.",
+            "Uses tracing crate.",
+        );
+
+        // Vector index associates "auth" entry with embedding [1,0,0]
+        // and "logging" entry with embedding [0,1,0]
+        vector_index.add("viking://project/decisions/auth", vec![1.0, 0.0, 0.0]);
+        vector_index.add("viking://project/decisions/logging", vec![0.0, 1.0, 0.0]);
+
+        // Query embedding close to "auth" entry
+        let query_embedding = vec![0.9, 0.1, 0.0];
+
+        let injector = ContextInjector::new(&store, &keyword_index)
+            .with_vector_search(&vector_index, query_embedding);
+
+        let config = InjectionConfig::default();
+        let result = injector.build_context("login flow", &config);
+
+        // Vector search should find "auth" (close embedding) even though
+        // keyword "login" doesn't match
+        assert!(
+            result.text.contains("JWT"),
+            "vector search should find auth entry by embedding similarity"
+        );
+    }
+
+    #[test]
+    fn vector_search_falls_back_to_keyword_when_empty() {
+        let (_dir, store, mut keyword_index) = setup_empty();
+        let vector_index = VectorIndex::new(); // Empty vector index
+
+        write_entry(
+            &store,
+            &mut keyword_index,
+            "viking://project/decisions/auth",
+            "Authentication uses JWT tokens.",
+            "JWT-based auth flow.",
+        );
+
+        let query_embedding = vec![1.0, 0.0, 0.0];
+        let injector = ContextInjector::new(&store, &keyword_index)
+            .with_vector_search(&vector_index, query_embedding);
+
+        let config = InjectionConfig::default();
+        let result = injector.build_context("auth tokens", &config);
+
+        // Should fall back to keyword search
+        assert!(
+            result.text.contains("JWT"),
+            "should fall back to keyword search when vector index is empty"
+        );
     }
 }

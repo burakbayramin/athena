@@ -50,3 +50,7 @@
 | D044 | `AgentRequest.messages` has `serde(default, skip_serializing_if)` | Backward compat with existing serialized data — empty vec is default | 2026-03-14 |
 | D045 | Conversation history per task keyed by task name | Each task has independent multi-turn history within a phase | 2026-03-14 |
 | D046 | Records prompt+response after each task execution | History accumulates naturally across retry attempts | 2026-03-14 |
+| D047 | O(n) brute-force cosine similarity for VectorIndex | Suitable for <10K entries, no external vector DB dependency | 2026-03-14 |
+| D048 | JSON persistence for embedding vectors | Simple, human-readable, acceptable size for project-scale data | 2026-03-14 |
+| D049 | Query embedding provided by caller to ContextInjector | ContextInjector stays sync — embedding API call handled externally | 2026-03-14 |
+| D050 | Vector search falls back to keyword when empty | Graceful degradation for users without embedding API | 2026-03-14 |

@@ -1,6 +1,6 @@
 # State
 
-**Milestone:** M006 — Multi-Turn Conversations
+**Milestone:** M007 — Embedding-Based Memory Recall
 **Status:** complete
 **Active Slice:** none
 **Phase:** idle
@@ -13,10 +13,11 @@
 - M004: ✅ Agent & Skill Plugin System (5 slices)
 - M005: ✅ Streaming Output (2 slices)
 - M006: ✅ Multi-Turn Conversations (2 slices)
+- M007: ✅ Embedding-Based Memory Recall (2 slices)
 
 ## Test Count
 
-679 tests passing, 0 failures across 8 crates.
+694 tests passing, 0 failures across 8 crates.
 
 ## Pending
 
