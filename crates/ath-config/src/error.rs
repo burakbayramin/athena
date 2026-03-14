@@ -22,6 +22,13 @@ pub enum ConfigError {
     #[error("Could not determine config directory")]
     NoConfigDir,
 
+    /// Invalid skills routing configuration.
+    #[error("Invalid skills config: {reason}")]
+    InvalidSkillsConfig {
+        /// What's wrong.
+        reason: String,
+    },
+
     /// Invalid agent configuration entry.
     #[error("Invalid agent config at index {index}: {reason}")]
     InvalidAgentConfig {
@@ -44,6 +51,9 @@ impl ConfigError {
             }
             ConfigError::NoConfigDir => {
                 "Set the HOME or XDG_CONFIG_HOME environment variable"
+            }
+            ConfigError::InvalidSkillsConfig { .. } => {
+                "Check .ath/skills.toml — routes need non-empty provider and model"
             }
             ConfigError::InvalidAgentConfig { .. } => {
                 "Check .ath/agents.toml — each [[agents]] entry needs provider, model, and api_key_env"

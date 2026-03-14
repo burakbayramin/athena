@@ -9,6 +9,7 @@ use crate::agents::{self, AgentsConfig};
 use crate::env;
 use crate::error::ConfigError;
 use crate::file::{self, RawFileConfig};
+use crate::skills::SkillsConfig;
 
 /// Default model for Claude (Anthropic).
 const DEFAULT_CLAUDE_MODEL: &str = "opus-4";
@@ -37,6 +38,8 @@ pub struct ConfigStore {
     pub codex_model: String,
     /// Agent definitions (from `.ath/agents.toml` or defaults).
     pub agents: AgentsConfig,
+    /// Skill routing config (from `.ath/skills.toml`, if present).
+    pub skills: Option<SkillsConfig>,
 }
 
 impl ConfigStore {
@@ -72,6 +75,14 @@ impl ConfigStore {
                 &store.gemini_model,
                 &store.codex_model,
             )
+        };
+
+        // Load skills config: .ath/skills.toml if it exists
+        let skills_path = std::path::Path::new(".ath").join("skills.toml");
+        store.skills = if skills_path.exists() {
+            Some(SkillsConfig::load(&skills_path)?)
+        } else {
+            None
         };
 
         Ok(store)
@@ -147,6 +158,7 @@ impl ConfigStore {
             gemini_model,
             codex_model,
             agents,
+            skills: None,
         }
     }
 

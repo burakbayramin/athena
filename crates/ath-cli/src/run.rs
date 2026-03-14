@@ -138,7 +138,11 @@ pub(crate) async fn run_command(args: RunArgs, global: GlobalArgs) -> Result<()>
 
     let mut plan = plan;
     let registry = build_agent_registry(&config)?;
-    assign_agents_and_check_isolation(&mut plan, |kind| registry.get(kind).is_some())?;
+    assign_agents_and_check_isolation_with_skills(
+        &mut plan,
+        |kind| registry.get(kind).is_some(),
+        config.skills.as_ref(),
+    )?;
     let output_dir = std::env::current_dir().map_err(|e| anyhow!("{e}"))?;
     crate::dry_run::write_plan_cache(&output_dir, &plan)?;
 
@@ -259,7 +263,15 @@ pub(crate) fn assign_agents_and_check_isolation(
     plan: &mut ExecutionPlan,
     available: impl Fn(&AgentId) -> bool + Copy,
 ) -> Result<()> {
-    let table = taxonomy::build_routing_table();
+    assign_agents_and_check_isolation_with_skills(plan, available, None)
+}
+
+pub(crate) fn assign_agents_and_check_isolation_with_skills(
+    plan: &mut ExecutionPlan,
+    available: impl Fn(&AgentId) -> bool + Copy,
+    skills: Option<&ath_config::SkillsConfig>,
+) -> Result<()> {
+    let table = taxonomy::build_routing_table_with_config(skills);
 
     for phase in &mut plan.phases {
         assign_all_tasks(phase, &table, available).map_err(|e| anyhow!("{e}"))?;

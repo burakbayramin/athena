@@ -48,6 +48,7 @@ fn config_no_keys() -> ConfigStore {
         gemini_model: "2.5-pro".into(),
         codex_model: "o3".into(),
         agents: ath_config::AgentsConfig::default(),
+            skills: None,
     }
 }
 

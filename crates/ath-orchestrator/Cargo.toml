@@ -6,6 +6,7 @@ edition.workspace = true
 [dependencies]
 ath-types = { path = "../ath-types" }
 ath-agents = { path = "../ath-agents" }
+ath-config = { path = "../ath-config" }
 ath-git = { path = "../ath-git" }
 ath-memory = { path = "../ath-memory" }
 thiserror.workspace = true

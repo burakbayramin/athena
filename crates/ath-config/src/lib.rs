@@ -14,11 +14,13 @@ pub mod agents;
 pub mod env;
 pub mod error;
 pub mod file;
+pub mod skills;
 pub mod store;
 
 // Re-export primary types at crate root for convenience.
 pub use agents::{AgentConfig, AgentsConfig};
 pub use error::ConfigError;
+pub use skills::SkillsConfig;
 pub use store::ConfigStore;
 
 // Validate the ath-types dependency is wired correctly.

@@ -59,7 +59,7 @@ This milestone is complete only when all are true:
 - [x] **S02: Agent Config & Dynamic Registry** `risk:medium` `depends:[S01]`
   > After this: agents defined in `.ath/agents.toml` load into the registry alongside built-in providers — proven by unit tests for config parsing and registry construction
 
-- [ ] **S03: Configurable Skill Routing** `risk:medium` `depends:[S01]`
+- [x] **S03: Configurable Skill Routing** `risk:medium` `depends:[S01]`
   > After this: skill→agent mapping loaded from `.ath/skills.toml`, falls back to defaults when absent — proven by unit tests for config parsing and routing with custom skills
 
 - [ ] **S04: Generic OpenAI Provider** `risk:medium` `depends:[S01,S02]`

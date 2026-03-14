@@ -129,6 +129,7 @@ mod tests {
             gemini_model: "2.5-pro".to_string(),
             codex_model: "o3".to_string(),
             agents: ath_config::AgentsConfig::default(),
+            skills: None,
         }
     }
 
@@ -141,6 +142,7 @@ mod tests {
             gemini_model: "2.5-pro".to_string(),
             codex_model: "o3".to_string(),
             agents: ath_config::AgentsConfig::default(),
+            skills: None,
         }
     }
 

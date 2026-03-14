@@ -36,3 +36,5 @@
 | D030 | API keys referenced by env var name in agents.toml, never as literals | Security: config files can be committed without leaking secrets. `api_key_env = "ANTHROPIC_API_KEY"` resolved at runtime via `std::env::var`. | 2026-03-14 |
 | D031 | AgentsConfig defaults synthesized from ConfigStore fields | Backward compat: when no `.ath/agents.toml` exists, `default_agents_from_config()` creates entries from existing env vars + model defaults. Zero config change for existing users. | 2026-03-14 |
 | D032 | Custom providers skip with warning in `build_backend_for_agent` | Unknown providers not yet supported — deferred to S04 (generic OpenAI provider). Warning printed to stderr, agent skipped, no crash. | 2026-03-14 |
+| D033 | Skills config routes override defaults, don't replace entire table | Unspecified tags keep hardcoded routing. Config is additive/override, not a full replacement. Reduces required config for minor tweaks. | 2026-03-14 |
+| D034 | Route tags normalized to lowercase in `SkillsConfig::parse()` | Case-insensitive matching — "Rust" and "rust" route to the same agent. Consistent with taxonomy's lowercase convention. | 2026-03-14 |
