@@ -587,6 +587,68 @@ mod tests {
             ProgressEvent::StreamChunk { chunk, phase_id: 1, .. } if chunk == "world!"
         ));
     }
+
+    #[tokio::test]
+    async fn retry_threads_conversation_history_into_subsequent_requests() {
+        use ath_agents::CapturingMockBackend;
+
+        let claude = AgentId::claude("opus-4");
+        let gemini = AgentId::gemini("2.5-pro");
+
+        let phase = make_phase(
+            1,
+            "phase-1",
+            vec![make_task_spec("task-1", Some(claude.clone()))],
+        );
+
+        // Task backend captures requests — 2 attempts (first fails review, second passes)
+        let task_mock = Arc::new(CapturingMockBackend::new(vec![
+            Ok(mock_response(
+                &make_task_output_json("task-1", &claude, "src/main.rs"),
+                &claude,
+            )),
+            Ok(mock_response(
+                &make_task_output_json("task-1", &claude, "src/main.rs"),
+                &claude,
+            )),
+        ]));
+        let reviewer_mock = Arc::new(MockBackend::new(vec![
+            Ok(mock_response(&failing_verdict_json("needs work"), &gemini)),
+            Ok(mock_response(&passing_verdict_json(), &gemini)),
+        ]));
+
+        let mut registry = AgentRegistry::new();
+        registry.register(claude.clone(), task_mock.clone());
+        registry.register(gemini.clone(), reviewer_mock);
+
+        let write_files = |_: &[FileOutput]| -> Result<(), PhaseRunnerError> { Ok(()) };
+
+        run_phase_with_progress(&phase, &registry, |_| true, write_files, None, None)
+            .await
+            .expect("phase executes");
+
+        let requests = task_mock.captured_requests();
+        assert_eq!(requests.len(), 2, "should have 2 task execution requests");
+
+        // First request: no conversation history
+        assert!(
+            requests[0].messages.is_empty(),
+            "first attempt should have no conversation history"
+        );
+
+        // Second request: should have conversation history from first attempt
+        assert!(
+            !requests[1].messages.is_empty(),
+            "second attempt should include conversation history"
+        );
+        assert_eq!(
+            requests[1].messages.len(),
+            2,
+            "should have user+assistant pair from first attempt"
+        );
+        assert_eq!(requests[1].messages[0].role, ath_types::agent::ChatRole::User);
+        assert_eq!(requests[1].messages[1].role, ath_types::agent::ChatRole::Assistant);
+    }
 }
 
 #[cfg(test)]

@@ -19,4 +19,4 @@ pub use actor::generic::{GenericHandle, GenericHandleConfig};
 pub use backend::{AgentBackend, ChunkCallback};
 pub use circuit_breaker::CircuitBreaker;
 pub use error::AgentError;
-pub use mock::MockBackend;
+pub use mock::{CapturingMockBackend, MockBackend};

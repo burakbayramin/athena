@@ -11,6 +11,7 @@
 //! - Unified validation error types
 
 pub mod agent;
+pub mod conversation;
 pub mod error;
 pub mod phase;
 pub mod plan;
@@ -20,7 +21,8 @@ pub mod review;
 
 // Re-export key types at crate root for ergonomic imports
 #[allow(deprecated)]
-pub use agent::{AgentId, AgentKind, AgentRequest, AgentResponse};
+pub use agent::{AgentId, AgentKind, AgentRequest, AgentResponse, ChatMessage, ChatRole};
+pub use conversation::ConversationBuilder;
 pub use error::ValidationError;
 pub use phase::{AgentContribution, PhaseRecord, ReviewAttempt, TokenUsage};
 pub use plan::{ContractLabel, ExecutionPlan, PhaseSpec, TaskSpec};

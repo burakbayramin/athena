@@ -100,6 +100,7 @@ impl ExtractionLlm for BackendLlmAdapter {
             prompt: prompt.to_string(),
             context: None,
             json_schema: json_schema.cloned(),
+            messages: vec![],
             created_at: chrono::Utc::now(),
         };
 
@@ -265,6 +266,7 @@ pub async fn run_phase_with_memory(
             prompt: review_prompt.clone(),
             context: None,
             json_schema: Some(review::review_verdict_schema()),
+            messages: vec![],
             created_at: chrono::Utc::now(),
         };
 
@@ -519,6 +521,7 @@ async fn execute_phase_tasks_with_memory(
             prompt: prompt.clone(),
             context,
             json_schema: Some(task_output_schema()),
+            messages: vec![],
             created_at: chrono::Utc::now(),
         };
 

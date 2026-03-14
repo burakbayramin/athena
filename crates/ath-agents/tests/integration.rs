@@ -22,6 +22,7 @@ fn make_request(agent: AgentId) -> AgentRequest {
         prompt: "What is 2 + 2?".into(),
         context: None,
         json_schema: None,
+        messages: vec![],
         created_at: Utc::now(),
     }
 }

@@ -249,6 +249,7 @@ mod tests {
             prompt: "test".into(),
             context: None,
             json_schema: None,
+            messages: vec![],
             created_at: chrono::Utc::now(),
         };
 

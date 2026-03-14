@@ -12,7 +12,8 @@ use std::marker::PhantomData;
 use std::sync::Arc;
 
 use ath_agents::AgentBackend;
-use ath_types::agent::{AgentId, AgentRequest, AgentResponse};
+use ath_types::agent::{AgentId, AgentRequest, AgentResponse, ChatMessage};
+use ath_types::conversation::ConversationBuilder;
 use ath_types::plan::PhaseSpec;
 use ath_types::review::ReviewVerdict;
 use serde::{Deserialize, Serialize};
@@ -481,7 +482,8 @@ pub async fn execute_phase_tasks(
     registry: &AgentRegistry,
     feedback: Option<&ReviewVerdict>,
 ) -> Result<Vec<TaskOutput>, PhaseRunnerError> {
-    execute_phase_tasks_with_progress(phase, registry, feedback, 1, None).await
+    let mut conversations = HashMap::new();
+    execute_phase_tasks_with_progress(phase, registry, feedback, 1, None, &mut conversations).await
 }
 
 /// Dispatches each task in a phase to its assigned agent sequentially and emits
@@ -492,6 +494,7 @@ pub async fn execute_phase_tasks_with_progress(
     feedback: Option<&ReviewVerdict>,
     attempt_number: u32,
     observer: Option<SharedProgressObserver>,
+    conversations: &mut HashMap<String, ConversationBuilder>,
 ) -> Result<Vec<TaskOutput>, PhaseRunnerError> {
     let mut outputs = Vec::with_capacity(phase.tasks.len());
     let total_tasks = phase.tasks.len();
@@ -533,12 +536,19 @@ pub async fn execute_phase_tasks_with_progress(
             task.description.clone()
         };
 
+        // Get conversation history for multi-turn retry
+        let history = conversations
+            .get(&task.name)
+            .map(|cb| cb.messages().to_vec())
+            .unwrap_or_default();
+
         let request = AgentRequest {
             id: uuid::Uuid::new_v4(),
             agent: agent.clone(),
             prompt: prompt.clone(),
             context: None,
             json_schema: Some(task_output_schema()),
+            messages: history,
             created_at: chrono::Utc::now(),
         };
 
@@ -577,6 +587,13 @@ pub async fn execute_phase_tasks_with_progress(
         task_output.agent = agent.clone();
         task_output.input_tokens = response.input_tokens;
         task_output.output_tokens = response.output_tokens;
+
+        // Record this turn in conversation history for multi-turn retry
+        let conv = conversations
+            .entry(task.name.clone())
+            .or_insert_with(ConversationBuilder::default);
+        conv.push_user(&prompt);
+        conv.push_assistant(&response.content);
 
         if wants_transcripts(observer.as_ref()) {
             emit_progress(
@@ -675,6 +692,9 @@ pub async fn run_phase_with_progress(
     let mut all_contributions: Vec<AgentContribution> = Vec::new();
     let mut last_feedback: Option<ReviewVerdict> = None;
 
+    // Conversation history per task (keyed by task name) for multi-turn retry
+    let mut conversations: HashMap<String, ConversationBuilder> = HashMap::new();
+
     // Create the pending state and start it
     let state = PhaseState::<Pending>::new(phase.id, phase.name.clone());
     let _running = state.start();
@@ -699,13 +719,14 @@ pub async fn run_phase_with_progress(
             }
         }
 
-        // Execute all tasks
+        // Execute all tasks (with conversation history for multi-turn retry)
         let outputs = execute_phase_tasks_with_progress(
             phase,
             registry,
             last_feedback.as_ref(),
             attempt,
             observer.clone(),
+            &mut conversations,
         )
         .await?;
 
@@ -733,6 +754,7 @@ pub async fn run_phase_with_progress(
             prompt: review_prompt.clone(),
             context: None,
             json_schema: Some(review::review_verdict_schema()),
+            messages: vec![],
             created_at: chrono::Utc::now(),
         };
 

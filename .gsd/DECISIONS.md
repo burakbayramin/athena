@@ -45,3 +45,8 @@
 | D039 | `send_streaming()` has default impl delegating to `send()` | MockBackend and existing tests unchanged — streaming is opt-in. | 2026-03-14 |
 | D040 | StreamChunk events only emitted when observer captures_transcripts | Avoids overhead in normal (non-verbose) mode | 2026-03-14 |
 | D041 | Progress bar suspended during chunk writes via `progress_bar.suspend()` | Prevents spinner redraw interleaving with streaming text | 2026-03-14 |
+| D042 | `ChatMessage` uses ~4 chars/token for estimation | Conservative heuristic, avoids tiktoken dependency | 2026-03-14 |
+| D043 | Conversation truncation keeps first 2 messages + most recent, drops middle | Preserves initial context and latest state | 2026-03-14 |
+| D044 | `AgentRequest.messages` has `serde(default, skip_serializing_if)` | Backward compat with existing serialized data — empty vec is default | 2026-03-14 |
+| D045 | Conversation history per task keyed by task name | Each task has independent multi-turn history within a phase | 2026-03-14 |
+| D046 | Records prompt+response after each task execution | History accumulates naturally across retry attempts | 2026-03-14 |

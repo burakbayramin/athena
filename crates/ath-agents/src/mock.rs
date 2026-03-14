@@ -115,6 +115,54 @@ impl AgentBackend for MockBackend {
     }
 }
 
+/// A mock that captures all incoming requests and returns sequenced responses.
+///
+/// Use `captured_requests()` after the test to inspect what was sent, including
+/// conversation history in `messages`.
+pub struct CapturingMockBackend {
+    responses: Mutex<VecDeque<Result<AgentResponse, AgentError>>>,
+    captured: Mutex<Vec<AgentRequest>>,
+    name: String,
+}
+
+impl CapturingMockBackend {
+    /// Create a capturing mock with pre-configured responses.
+    pub fn new(responses: Vec<Result<AgentResponse, AgentError>>) -> Self {
+        Self {
+            responses: Mutex::new(VecDeque::from(responses)),
+            captured: Mutex::new(Vec::new()),
+            name: "capturing-mock".into(),
+        }
+    }
+
+    /// Get all captured requests.
+    pub fn captured_requests(&self) -> Vec<AgentRequest> {
+        self.captured.lock().unwrap().clone()
+    }
+}
+
+#[async_trait]
+impl AgentBackend for CapturingMockBackend {
+    async fn send(&self, request: AgentRequest) -> Result<AgentResponse, AgentError> {
+        self.captured.lock().unwrap().push(request.clone());
+        let mut q = self.responses.lock().unwrap();
+        q.pop_front().unwrap_or_else(|| {
+            panic!(
+                "CapturingMockBackend: no more responses queued (request id: {})",
+                request.id
+            )
+        })
+    }
+
+    async fn is_available(&self) -> bool {
+        true
+    }
+
+    fn provider_name(&self) -> &str {
+        &self.name
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -128,6 +176,7 @@ mod tests {
             prompt: "test prompt".into(),
             context: None,
             json_schema: None,
+            messages: vec![],
             created_at: Utc::now(),
         }
     }

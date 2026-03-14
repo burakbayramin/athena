@@ -102,6 +102,7 @@ pub fn build_decompose_request(project: &ProjectSpec, last_error: Option<&str>) 
         prompt,
         context: Some(DECOMPOSE_SYSTEM_PROMPT.to_string()),
         json_schema: Some(execution_plan_json_schema()),
+        messages: vec![],
         created_at: Utc::now(),
     }
 }

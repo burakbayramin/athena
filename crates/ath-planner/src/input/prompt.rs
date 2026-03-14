@@ -100,6 +100,7 @@ pub fn build_natural_language_request(description: &str, last_error: Option<&str
         prompt,
         context: Some(SYSTEM_PROMPT.to_string()),
         json_schema: Some(project_spec_json_schema()),
+        messages: vec![],
         created_at: Utc::now(),
     }
 }
@@ -122,6 +123,7 @@ pub fn build_spec_file_request(content: &str, last_error: Option<&str>) -> Agent
         prompt,
         context: Some(SPEC_FILE_SYSTEM_PROMPT.to_string()),
         json_schema: Some(project_spec_json_schema()),
+        messages: vec![],
         created_at: Utc::now(),
     }
 }
@@ -161,6 +163,7 @@ pub fn build_codebase_request(
         prompt,
         context: Some(CODEBASE_SYSTEM_PROMPT.to_string()),
         json_schema: Some(project_spec_json_schema()),
+        messages: vec![],
         created_at: Utc::now(),
     }
 }

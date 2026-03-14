@@ -194,6 +194,50 @@ impl<'de> Deserialize<'de> for AgentId {
 #[deprecated(note = "Use AgentId instead")]
 pub type AgentKind = AgentId;
 
+/// Role in a conversation message.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "lowercase")]
+pub enum ChatRole {
+    User,
+    Assistant,
+    System,
+}
+
+/// A single message in a conversation history.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct ChatMessage {
+    pub role: ChatRole,
+    pub content: String,
+}
+
+impl ChatMessage {
+    pub fn user(content: impl Into<String>) -> Self {
+        Self {
+            role: ChatRole::User,
+            content: content.into(),
+        }
+    }
+
+    pub fn assistant(content: impl Into<String>) -> Self {
+        Self {
+            role: ChatRole::Assistant,
+            content: content.into(),
+        }
+    }
+
+    pub fn system(content: impl Into<String>) -> Self {
+        Self {
+            role: ChatRole::System,
+            content: content.into(),
+        }
+    }
+
+    /// Rough token estimate: ~4 chars per token (conservative).
+    pub fn estimated_tokens(&self) -> usize {
+        self.content.len() / 4
+    }
+}
+
 /// A typed request from the orchestrator to an agent.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct AgentRequest {
@@ -208,6 +252,13 @@ pub struct AgentRequest {
     /// Optional JSON schema for structured output (provider-native JSON mode).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub json_schema: Option<serde_json::Value>,
+    /// Conversation history for multi-turn exchanges.
+    ///
+    /// When non-empty, these messages are prepended to the ChatRequest
+    /// before the current prompt. The current prompt becomes the final
+    /// user message.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub messages: Vec<ChatMessage>,
     /// When this request was created.
     pub created_at: DateTime<Utc>,
 }
@@ -391,6 +442,7 @@ mod tests {
             prompt: "Analyze this code".into(),
             context: Some("src/main.rs contents".into()),
             json_schema: None,
+            messages: vec![],
             created_at: Utc::now(),
         };
 
@@ -407,6 +459,7 @@ mod tests {
             prompt: "test".into(),
             context: None,
             json_schema: None,
+            messages: vec![],
             created_at: Utc::now(),
         };
         let json = serde_json::to_string(&req).expect("serialize");
@@ -423,6 +476,7 @@ mod tests {
             prompt: "test".into(),
             context: None,
             json_schema: Some(serde_json::json!({"type": "object"})),
+            messages: vec![],
             created_at: Utc::now(),
         };
         let json = serde_json::to_string(&req).expect("serialize");

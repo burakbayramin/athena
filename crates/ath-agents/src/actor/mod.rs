@@ -199,10 +199,10 @@ pub async fn call_provider(
     json_schema: Option<&serde_json::Value>,
     provider: &str,
 ) -> Result<(String, u64, u64), AgentError> {
-    call_provider_streaming(client, model, prompt, context, json_schema, provider, None).await
+    call_provider_streaming(client, model, prompt, context, json_schema, provider, None, &[]).await
 }
 
-/// Call a provider with optional streaming chunk callback.
+/// Call a provider with optional streaming chunk callback and conversation history.
 pub async fn call_provider_streaming(
     client: &genai::Client,
     model: &str,
@@ -211,14 +211,41 @@ pub async fn call_provider_streaming(
     json_schema: Option<&serde_json::Value>,
     provider: &str,
     on_chunk: Option<&(dyn Fn(&str) + Send + Sync)>,
+    messages: &[ath_types::agent::ChatMessage],
 ) -> Result<(String, u64, u64), AgentError> {
+    use ath_types::agent::ChatRole;
     use futures::StreamExt;
-    use genai::chat::{ChatOptions, ChatResponseFormat, ChatStreamEvent, JsonSpec};
+    use genai::chat::{ChatMessage, ChatOptions, ChatResponseFormat, ChatStreamEvent, JsonSpec};
 
-    let mut chat_req = ChatRequest::from_user(prompt);
-    if let Some(ctx) = context {
-        chat_req = chat_req.with_system(ctx);
-    }
+    // Build ChatRequest from conversation history + current prompt
+    let chat_req = if messages.is_empty() {
+        let mut req = ChatRequest::from_user(prompt);
+        if let Some(ctx) = context {
+            req = req.with_system(ctx);
+        }
+        req
+    } else {
+        let mut msgs: Vec<ChatMessage> = Vec::with_capacity(messages.len() + 2);
+
+        // System message first (if provided)
+        if let Some(ctx) = context {
+            msgs.push(ChatMessage::system(ctx));
+        }
+
+        // Conversation history
+        for msg in messages {
+            match msg.role {
+                ChatRole::User => msgs.push(ChatMessage::user(&msg.content)),
+                ChatRole::Assistant => msgs.push(ChatMessage::assistant(&msg.content)),
+                ChatRole::System => msgs.push(ChatMessage::system(&msg.content)),
+            }
+        }
+
+        // Current prompt as final user message
+        msgs.push(ChatMessage::user(prompt));
+
+        ChatRequest::from_messages(msgs)
+    };
 
     // JSON schema mode: fall back to non-streaming (some providers don't support both)
     if let Some(schema) = json_schema {
@@ -342,6 +369,7 @@ pub async fn run_with_retry_and_breaker_streaming(
                 request.json_schema.as_ref(),
                 provider,
                 chunk_cb,
+                &request.messages,
             )
             .await;
 
