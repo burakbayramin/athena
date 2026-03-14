@@ -65,7 +65,7 @@ This milestone is complete only when all are true:
 - [x] **S04: Generic OpenAI Provider** `risk:medium` `depends:[S01,S02]`
   > After this: a generic OpenAI-compatible provider sends requests to any base_url (Ollama, Groq, etc.) — proven by unit test with mock HTTP server
 
-- [ ] **S05: CLI & End-to-End Integration** `risk:low` `depends:[S01,S02,S03,S04]`
+- [x] **S05: CLI & End-to-End Integration** `risk:low` `depends:[S01,S02,S03,S04]`
   > After this: `ath agents list|test` work, a full run with mixed built-in and custom agents executes — proven by CLI tests and integration test
 
 ## Boundary Map

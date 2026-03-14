@@ -2,7 +2,7 @@
 
 ## What This Is
 
-Athena is a Rust CLI tool that acts as an AI orchestra conductor — it takes a software project idea (natural language, spec document, or existing codebase), analyzes it into smart development phases, and autonomously executes those phases by coordinating three AI agents (Claude, Gemini, Codex/Copilot) working in parallel on isolated modules. Each phase goes through a cross-review quality gate before the next begins.
+Athena is a Rust CLI tool that acts as an AI orchestra conductor — it takes a software project idea (natural language, spec document, or existing codebase), analyzes it into smart development phases, and autonomously executes those phases by coordinating multiple AI agents working in parallel on isolated modules. Each phase goes through a cross-review quality gate before the next begins. Agents are configurable via `.ath/agents.toml` — built-in providers (Claude, Gemini, Codex) and any OpenAI-compatible endpoint (Ollama, Groq, Together, etc.) are supported.
 
 ## Core Value
 
@@ -40,17 +40,18 @@ Intelligent phase analysis — breaking any software project into well-structure
 - PR-based workflow — direct commits to local repo
 - Mobile app — CLI distribution only
 - Real-time collaboration — single-user tool
-- Plugin system for custom agent definitions — v2 scope
-- Support for local/self-hosted models (Ollama, etc.) — v2 scope
+- ~~Plugin system for custom agent definitions~~ — validated in M004
+- ~~Support for local/self-hosted models (Ollama, etc.)~~ — validated in M004
 
 ## Context
 
 Shipped v1.0 MVP with 16,315 lines of Rust across 7 crates (58 source files, 415 tests).
 Milestone M001 (Migration) completed 2026-03-13 — all 10 slices delivered, all 14 requirements validated.
 Milestone M002 (Memory Layer) completed 2026-03-14 — all 6 slices delivered, 5 requirements validated.
-Milestone M003 (Resumable Execution) completed 2026-03-14 — all 3 slices delivered, 1 requirement validated. 612 tests passing.
+Milestone M003 (Resumable Execution) completed 2026-03-14 — all 3 slices delivered, 1 requirement validated.
+Milestone M004 (Agent & Skill Plugin System) completed 2026-03-14 — all 5 slices delivered, 2 requirements validated. 665 tests passing.
 Tech stack: Rust, tokio, clap, git2, genai, backon.
-Three AI backends: Anthropic (Claude), Google (Gemini), OpenAI (Codex/Copilot).
+Extensible agent system: built-in providers (Anthropic/Claude, Google/Gemini, OpenAI/Codex) plus any OpenAI-compatible endpoint via GenericHandle.
 Module isolation with strict file ownership prevents agent conflicts.
 Cross-agent review gates ensure quality before phase progression.
 Parallel execution via tokio JoinSet with isolation-gate pre-check.
@@ -83,6 +84,7 @@ Durable run reports persisted at `.ath/runs/<run-id>/report.json` with cost esti
 | M001 | Migration | ✅ Complete | 2026-03-13 |
 | M002 | Memory Layer | ✅ Complete | 2026-03-14 |
 | M003 | Resumable Execution | ✅ Complete | 2026-03-14 |
+| M004 | Agent & Skill Plugin System | ✅ Complete | 2026-03-14 |
 
 ---
-*Last updated: 2026-03-14 — M003 (Resumable Execution) complete*
+*Last updated: 2026-03-14 — M004 (Agent & Skill Plugin System) complete*

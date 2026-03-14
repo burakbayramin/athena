@@ -37,8 +37,8 @@
 | REQ-MOBILE | Mobile app | CLI distribution only |
 | REQ-COLLAB | Real-time collaboration | Single-user tool |
 
-| REQ-PLUGINS | Plugin system for custom agent definitions | v2 scope |
-| REQ-LOCAL-MODELS | Support for local/self-hosted models | v2 scope |
+| REQ-PLUGINS | ~~Plugin system for custom agent definitions~~ | Validated in M004 — .ath/agents.toml |
+| REQ-LOCAL-MODELS | ~~Support for local/self-hosted models~~ | Validated in M004 — GenericHandle + base_url |
 | REQ-CROSS-PROJECT-MEM | Cross-project memory sharing | v3 scope |
 | REQ-MEM-TUI | Interactive TUI memory editor | v3 scope |
 | REQ-MEM-DIFF | Memory diffing between runs | v3 scope |

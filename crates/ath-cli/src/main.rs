@@ -2,6 +2,7 @@
 //!
 //! CLI entry point for the Athena multi-agent orchestrator.
 
+mod agents;
 mod cost;
 mod dry_run;
 mod init;
@@ -48,6 +49,8 @@ enum Commands {
     Report(report::ReportArgs),
     /// Inspect and manage the Viking memory store.
     Memory(memory::MemoryArgs),
+    /// Inspect and manage configured AI agents.
+    Agents(agents::AgentsArgs),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -82,6 +85,7 @@ async fn dispatch(cli: Cli) -> Result<()> {
         Some(Commands::Init(args)) => init::init_command(args, global),
         Some(Commands::Report(args)) => report::report_command(args, global),
         Some(Commands::Memory(args)) => memory::memory_command(args, global),
+        Some(Commands::Agents(args)) => agents::agents_command(args, global),
         None => {
             print!("{}", root_help_text());
             Ok(())

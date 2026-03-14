@@ -221,7 +221,14 @@ fn build_agent_registry(config: &ConfigStore) -> Result<AgentRegistry> {
 
 /// Build the appropriate backend for a single agent config entry.
 ///
-/// Returns `Ok(None)` for unsupported custom providers (handled in S04).
+/// Returns `Ok(None)` for unsupported custom providers.
+pub(crate) fn build_backend_for_agent_from_config(
+    agent_cfg: &ath_config::AgentConfig,
+    config: &ConfigStore,
+) -> Result<Option<Arc<dyn AgentBackend>>> {
+    build_backend_for_agent(agent_cfg, config)
+}
+
 fn build_backend_for_agent(
     agent_cfg: &ath_config::AgentConfig,
     config: &ConfigStore,
@@ -264,6 +271,7 @@ fn configured_secrets(config: &ConfigStore) -> Vec<String> {
     .collect()
 }
 
+#[cfg(test)]
 pub(crate) fn assign_agents_and_check_isolation(
     plan: &mut ExecutionPlan,
     available: impl Fn(&AgentId) -> bool + Copy,
