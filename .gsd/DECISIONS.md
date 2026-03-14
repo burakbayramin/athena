@@ -43,3 +43,5 @@
 | D037 | JSON schema requests fall back to non-streaming `exec_chat` | Not all providers support structured output + streaming simultaneously. Safety fallback. | 2026-03-14 |
 | D038 | `ChunkCallback` is `Arc<dyn Fn(&str) + Send + Sync>` | Can be cloned, sent across actor boundaries, and shared across retry attempts. | 2026-03-14 |
 | D039 | `send_streaming()` has default impl delegating to `send()` | MockBackend and existing tests unchanged — streaming is opt-in. | 2026-03-14 |
+| D040 | StreamChunk events only emitted when observer captures_transcripts | Avoids overhead in normal (non-verbose) mode | 2026-03-14 |
+| D041 | Progress bar suspended during chunk writes via `progress_bar.suspend()` | Prevents spinner redraw interleaving with streaming text | 2026-03-14 |

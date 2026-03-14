@@ -73,6 +73,13 @@ pub enum ProgressEvent {
         total_phases: usize,
     },
     Transcript(Transcript),
+    /// A streaming content chunk from an agent.
+    StreamChunk {
+        phase_id: u32,
+        phase_name: String,
+        agent: AgentId,
+        chunk: String,
+    },
 }
 
 /// Transcript capture categories layered onto the same progress seam.
@@ -119,6 +126,32 @@ pub fn emit_progress(observer: Option<&SharedProgressObserver>, event: ProgressE
 /// Returns true when the attached observer requested transcript payloads.
 pub fn wants_transcripts(observer: Option<&SharedProgressObserver>) -> bool {
     observer.is_some_and(|observer| observer.captures_transcripts())
+}
+
+/// Build a `ChunkCallback` that emits `StreamChunk` progress events.
+///
+/// Returns `None` when there is no observer or the observer doesn't capture
+/// transcripts (streaming is a verbose-mode feature).
+pub fn make_chunk_callback(
+    observer: Option<&SharedProgressObserver>,
+    phase_id: u32,
+    phase_name: &str,
+    agent: &AgentId,
+) -> Option<ath_agents::ChunkCallback> {
+    let observer = observer?.clone();
+    if !observer.captures_transcripts() {
+        return None;
+    }
+    let phase_name = phase_name.to_string();
+    let agent = agent.clone();
+    Some(Arc::new(move |chunk: &str| {
+        observer.on_event(ProgressEvent::StreamChunk {
+            phase_id,
+            phase_name: phase_name.clone(),
+            agent: agent.clone(),
+            chunk: chunk.to_string(),
+        });
+    }))
 }
 
 #[cfg(test)]
@@ -505,6 +538,54 @@ mod tests {
                 .any(|event| matches!(event, ProgressEvent::PhaseCompleted { .. })),
             "phase completed event should be emitted"
         );
+    }
+
+    #[test]
+    fn make_chunk_callback_returns_none_without_observer() {
+        let cb = make_chunk_callback(None, 1, "phase-1", &AgentId::claude("opus-4"));
+        assert!(cb.is_none());
+    }
+
+    #[test]
+    fn make_chunk_callback_returns_none_for_non_verbose_observer() {
+        let observer: SharedProgressObserver = Arc::new(RecordingObserver::default());
+        let cb = make_chunk_callback(Some(&observer), 1, "phase-1", &AgentId::claude("opus-4"));
+        assert!(cb.is_none(), "non-verbose observer should not get chunk callback");
+    }
+
+    #[test]
+    fn make_chunk_callback_emits_stream_chunk_events() {
+        #[derive(Default)]
+        struct VerboseRecorder {
+            events: Mutex<Vec<ProgressEvent>>,
+        }
+        impl ProgressObserver for VerboseRecorder {
+            fn on_event(&self, event: ProgressEvent) {
+                self.events.lock().unwrap().push(event);
+            }
+            fn captures_transcripts(&self) -> bool {
+                true
+            }
+        }
+
+        let recorder = Arc::new(VerboseRecorder::default());
+        let observer: SharedProgressObserver = recorder.clone();
+        let agent = AgentId::claude("opus-4");
+        let cb = make_chunk_callback(Some(&observer), 1, "phase-1", &agent).expect("should return callback");
+
+        cb("Hello ");
+        cb("world!");
+
+        let events = recorder.events.lock().unwrap();
+        assert_eq!(events.len(), 2);
+        assert!(matches!(
+            &events[0],
+            ProgressEvent::StreamChunk { chunk, phase_id: 1, .. } if chunk == "Hello "
+        ));
+        assert!(matches!(
+            &events[1],
+            ProgressEvent::StreamChunk { chunk, phase_id: 1, .. } if chunk == "world!"
+        ));
     }
 }
 

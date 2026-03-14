@@ -48,10 +48,18 @@ impl VerboseTranscriptSink {
     }
 
     pub(crate) fn on_event(&self, event: &ProgressEvent) {
-        if let ProgressEvent::Transcript(transcript) = event {
-            let block = format_transcript_block(transcript, &self.secrets);
-            self.blocks.lock().unwrap().push(block.clone());
-            self.progress.print_durable_block(&block);
+        match event {
+            ProgressEvent::Transcript(transcript) => {
+                let block = format_transcript_block(transcript, &self.secrets);
+                self.blocks.lock().unwrap().push(block.clone());
+                self.progress.print_durable_block(&block);
+            }
+            ProgressEvent::StreamChunk { chunk, .. } => {
+                // Print streaming chunks immediately without newline.
+                // The progress bar is suspended so chunks render cleanly.
+                self.progress.print_inline_chunk(chunk);
+            }
+            _ => {}
         }
     }
 
@@ -252,6 +260,31 @@ mod tests {
         assert!(blocks
             .iter()
             .any(|block| block.contains("[Retry Feedback]")));
+    }
+
+    #[test]
+    fn stream_chunk_event_is_handled_without_panic() {
+        let reporter = Arc::new(TerminalProgressReporter::new_for_test(false));
+        let sink = Arc::new(VerboseTranscriptSink::new(reporter.clone(), vec![]));
+        let observer = CliObserver::new(reporter, Some(sink));
+
+        // StreamChunk should be accepted without panic (output goes to stdout,
+        // which is suppressed in test mode)
+        observer.on_event(ProgressEvent::StreamChunk {
+            phase_id: 1,
+            phase_name: "foundation".into(),
+            agent: AgentId::claude("opus-4"),
+            chunk: "Hello ".into(),
+        });
+        observer.on_event(ProgressEvent::StreamChunk {
+            phase_id: 1,
+            phase_name: "foundation".into(),
+            agent: AgentId::claude("opus-4"),
+            chunk: "world!".into(),
+        });
+
+        // No crash, observer continues to accept events
+        assert!(observer.captures_transcripts());
     }
 
     #[test]

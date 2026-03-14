@@ -110,6 +110,26 @@ impl TerminalProgressReporter {
         }
     }
 
+    /// Print a streaming chunk inline (no trailing newline).
+    ///
+    /// Suspends the progress bar spinner while writing so the chunk text
+    /// isn't interleaved with the spinner redraw.
+    pub(crate) fn print_inline_chunk(&self, chunk: &str) {
+        use std::io::Write;
+        if !self.emit_stdout {
+            return;
+        }
+        if let Some(progress_bar) = &self.progress_bar {
+            progress_bar.suspend(|| {
+                let _ = std::io::stdout().write_all(chunk.as_bytes());
+                let _ = std::io::stdout().flush();
+            });
+        } else {
+            let _ = std::io::stdout().write_all(chunk.as_bytes());
+            let _ = std::io::stdout().flush();
+        }
+    }
+
     #[cfg(test)]
     pub(crate) fn snapshot(&self) -> String {
         self.state.lock().unwrap().snapshot.clone()
@@ -250,6 +270,10 @@ fn apply_event(state: &mut ReporterState, event: &ProgressEvent) {
             state.active_agent = None;
         }
         ProgressEvent::Transcript(_) => {}
+        ProgressEvent::StreamChunk { .. } => {
+            // Chunks are handled directly by the verbose transcript sink,
+            // not the progress bar state machine.
+        }
     }
 
     state.snapshot = render_snapshot(state);
@@ -456,6 +480,7 @@ fn plain_line(event: &ProgressEvent) -> Option<String> {
             phase_index, total_phases, phase_name
         )),
         ProgressEvent::Transcript(_) => None,
+        ProgressEvent::StreamChunk { .. } => None,
     }
 }
 

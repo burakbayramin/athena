@@ -19,8 +19,8 @@ use serde::{Deserialize, Serialize};
 
 use crate::error::PhaseRunnerError;
 use crate::progress::{
-    emit_progress, wants_transcripts, ProgressEvent, SharedProgressObserver, Transcript,
-    TranscriptKind,
+    emit_progress, make_chunk_callback, wants_transcripts, ProgressEvent, SharedProgressObserver,
+    Transcript, TranscriptKind,
 };
 use crate::review;
 
@@ -542,9 +542,16 @@ pub async fn execute_phase_tasks_with_progress(
             created_at: chrono::Utc::now(),
         };
 
+        let chunk_cb = make_chunk_callback(
+            observer.as_ref(),
+            phase.id,
+            &phase.name,
+            agent,
+        );
+
         let response: AgentResponse =
             backend
-                .send(request)
+                .send_streaming(request, chunk_cb)
                 .await
                 .map_err(|e| PhaseRunnerError::TaskExecutionFailed {
                     task_name: task.name.clone(),
@@ -739,12 +746,20 @@ pub async fn run_phase_with_progress(
             },
         );
 
-        let review_response = reviewer_backend.send(review_request).await.map_err(|e| {
-            PhaseRunnerError::ReviewDispatchFailed {
+        let review_chunk_cb = make_chunk_callback(
+            observer.as_ref(),
+            phase.id,
+            &phase.name,
+            &reviewer,
+        );
+
+        let review_response = reviewer_backend
+            .send_streaming(review_request, review_chunk_cb)
+            .await
+            .map_err(|e| PhaseRunnerError::ReviewDispatchFailed {
                 reviewer: format!("{:?}", reviewer),
                 reason: e.to_string(),
-            }
-        })?;
+            })?;
 
         let verdict = review::parse_review_verdict(&review_response.content, reviewer.clone())
             .map_err(|e| PhaseRunnerError::ReviewDispatchFailed {
