@@ -1,9 +1,9 @@
 # State
 
-**Milestone:** M004 — Agent & Skill Plugin System
-**Status:** complete
-**Active Slice:** none
-**Phase:** idle
+**Milestone:** M005 — Streaming Output
+**Status:** in_progress
+**Active Slice:** S02 — Streaming Chunk Observer
+**Phase:** planning
 
 ## Quick Status
 

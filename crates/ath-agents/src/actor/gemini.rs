@@ -15,7 +15,7 @@ use crate::backend::AgentBackend;
 use crate::circuit_breaker::CircuitBreaker;
 use crate::error::AgentError;
 
-use super::{build_genai_client, run_with_retry_and_breaker, ActorMessage};
+use super::{build_genai_client, run_with_retry_and_breaker_streaming, ActorMessage};
 
 /// The actor task that owns the genai client and circuit breaker.
 struct GeminiActor {
@@ -29,12 +29,13 @@ struct GeminiActor {
 impl GeminiActor {
     async fn run(mut self) {
         while let Some(msg) = self.receiver.recv().await {
-            let result = run_with_retry_and_breaker(
+            let result = run_with_retry_and_breaker_streaming(
                 &self.client,
                 &self.model,
                 &msg.request,
                 &mut self.circuit_breaker,
                 "gemini",
+                msg.on_chunk.as_ref(),
             )
             .await;
 
@@ -94,11 +95,20 @@ impl GeminiHandle {
 #[async_trait]
 impl AgentBackend for GeminiHandle {
     async fn send(&self, request: AgentRequest) -> Result<AgentResponse, AgentError> {
+        self.send_streaming(request, None).await
+    }
+
+    async fn send_streaming(
+        &self,
+        request: AgentRequest,
+        on_chunk: Option<crate::backend::ChunkCallback>,
+    ) -> Result<AgentResponse, AgentError> {
         let (tx, rx) = oneshot::channel();
         self.sender
             .send(ActorMessage {
                 request,
                 respond_to: tx,
+                on_chunk,
             })
             .await
             .map_err(|_| AgentError::ActorStopped)?;

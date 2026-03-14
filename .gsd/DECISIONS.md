@@ -40,3 +40,6 @@
 | D034 | Route tags normalized to lowercase in `SkillsConfig::parse()` | Case-insensitive matching — "Rust" and "rust" route to the same agent. Consistent with taxonomy's lowercase convention. | 2026-03-14 |
 | D035 | Custom `base_url` uses OpenAI adapter kind via `ServiceTargetResolver` | All OpenAI-compatible endpoints (Ollama, Groq, Together) share the same chat completions protocol. Single adapter handles all. | 2026-03-14 |
 | D036 | `GenericHandle` accepts optional API key | Ollama and other local models don't require auth. `api_key: None` skips the auth resolver entirely. | 2026-03-14 |
+| D037 | JSON schema requests fall back to non-streaming `exec_chat` | Not all providers support structured output + streaming simultaneously. Safety fallback. | 2026-03-14 |
+| D038 | `ChunkCallback` is `Arc<dyn Fn(&str) + Send + Sync>` | Can be cloned, sent across actor boundaries, and shared across retry attempts. | 2026-03-14 |
+| D039 | `send_streaming()` has default impl delegating to `send()` | MockBackend and existing tests unchanged — streaming is opt-in. | 2026-03-14 |

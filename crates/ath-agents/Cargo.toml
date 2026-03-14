@@ -13,6 +13,7 @@ chrono.workspace = true
 uuid.workspace = true
 ath-types = { path = "../ath-types" }
 ath-config = { path = "../ath-config" }
+futures.workspace = true
 genai.workspace = true
 backon.workspace = true
 

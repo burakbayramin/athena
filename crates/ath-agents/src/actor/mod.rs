@@ -10,6 +10,7 @@ pub mod codex;
 pub mod gemini;
 pub mod generic;
 
+use std::sync::Arc;
 use std::time::Duration;
 
 use ath_config::ConfigStore;
@@ -29,12 +30,17 @@ pub use codex::CodexHandle;
 pub use gemini::GeminiHandle;
 pub use generic::{GenericHandle, GenericHandleConfig};
 
+/// Callback type for streaming content chunks.
+pub type ChunkCallback = Arc<dyn Fn(&str) + Send + Sync>;
+
 /// Message sent from a handle to its actor via the mpsc channel.
 pub struct ActorMessage {
     /// The agent request to process.
     pub request: AgentRequest,
     /// Channel to send the result back to the caller.
     pub respond_to: oneshot::Sender<Result<AgentResponse, AgentError>>,
+    /// Optional callback for streaming content chunks.
+    pub on_chunk: Option<ChunkCallback>,
 }
 
 /// Classify a genai error into our normalized AgentError.
@@ -174,11 +180,17 @@ pub fn build_genai_client(config: &ConfigStore) -> Result<genai::Client, AgentEr
     Ok(client)
 }
 
-/// Call a provider via genai, returning content and token counts.
+/// Call a provider via genai streaming, returning content and token counts.
 ///
 /// Builds a ChatRequest from prompt + optional context and sends it through
-/// the genai client. When `json_schema` is provided, uses genai's JsonSpec
-/// response format for provider-native structured output enforcement.
+/// the genai client using `exec_chat_stream`. Content and usage are captured
+/// via `ChatOptions` and extracted from the `StreamEnd` event.
+///
+/// When `json_schema` is provided, falls back to non-streaming `exec_chat`
+/// since some providers don't support structured output with streaming.
+///
+/// An optional `on_chunk` callback receives each content chunk as it arrives,
+/// enabling real-time output display.
 pub async fn call_provider(
     client: &genai::Client,
     model: &str,
@@ -187,27 +199,91 @@ pub async fn call_provider(
     json_schema: Option<&serde_json::Value>,
     provider: &str,
 ) -> Result<(String, u64, u64), AgentError> {
-    use genai::chat::{ChatOptions, ChatResponseFormat, JsonSpec};
+    call_provider_streaming(client, model, prompt, context, json_schema, provider, None).await
+}
+
+/// Call a provider with optional streaming chunk callback.
+pub async fn call_provider_streaming(
+    client: &genai::Client,
+    model: &str,
+    prompt: &str,
+    context: Option<&str>,
+    json_schema: Option<&serde_json::Value>,
+    provider: &str,
+    on_chunk: Option<&(dyn Fn(&str) + Send + Sync)>,
+) -> Result<(String, u64, u64), AgentError> {
+    use futures::StreamExt;
+    use genai::chat::{ChatOptions, ChatResponseFormat, ChatStreamEvent, JsonSpec};
 
     let mut chat_req = ChatRequest::from_user(prompt);
     if let Some(ctx) = context {
         chat_req = chat_req.with_system(ctx);
     }
 
-    let options = json_schema.map(|schema| {
+    // JSON schema mode: fall back to non-streaming (some providers don't support both)
+    if let Some(schema) = json_schema {
         let spec = JsonSpec::new("structured_output", schema.clone());
-        ChatOptions::default().with_response_format(ChatResponseFormat::JsonSpec(spec))
-    });
+        let options =
+            ChatOptions::default().with_response_format(ChatResponseFormat::JsonSpec(spec));
 
-    let response = client
-        .exec_chat(model, chat_req, options.as_ref())
+        let response = client
+            .exec_chat(model, chat_req, Some(&options))
+            .await
+            .map_err(|e| classify_error(e, provider))?;
+
+        let input_tokens = response.usage.prompt_tokens.unwrap_or(0) as u64;
+        let output_tokens = response.usage.completion_tokens.unwrap_or(0) as u64;
+        let content = response.into_first_text().unwrap_or_default();
+
+        return Ok((content, input_tokens, output_tokens));
+    }
+
+    // Streaming mode: capture content and usage from stream
+    let options = ChatOptions::default()
+        .with_capture_content(true)
+        .with_capture_usage(true);
+
+    let chat_stream_res = client
+        .exec_chat_stream(model, chat_req, Some(&options))
         .await
         .map_err(|e| classify_error(e, provider))?;
 
-    let input_tokens = response.usage.prompt_tokens.unwrap_or(0) as u64;
-    let output_tokens = response.usage.completion_tokens.unwrap_or(0) as u64;
+    let mut stream = chat_stream_res.stream;
+    let mut stream_end = None;
 
-    let content = response.into_first_text().unwrap_or_default();
+    while let Some(event_result) = stream.next().await {
+        let event = event_result.map_err(|e| classify_error(e, provider))?;
+        match event {
+            ChatStreamEvent::Chunk(chunk) => {
+                if let Some(cb) = on_chunk {
+                    cb(&chunk.content);
+                }
+            }
+            ChatStreamEvent::End(end) => {
+                stream_end = Some(end);
+            }
+            // Start, ReasoningChunk, ThoughtSignatureChunk, ToolCallChunk — ignore
+            _ => {}
+        }
+    }
+
+    let end = stream_end.ok_or_else(|| AgentError::InvalidResponse {
+        provider: provider.to_string(),
+        reason: "stream ended without End event".to_string(),
+    })?;
+
+    let input_tokens = end
+        .captured_usage
+        .as_ref()
+        .and_then(|u| u.prompt_tokens)
+        .unwrap_or(0) as u64;
+    let output_tokens = end
+        .captured_usage
+        .as_ref()
+        .and_then(|u| u.completion_tokens)
+        .unwrap_or(0) as u64;
+
+    let content = end.captured_into_first_text().unwrap_or_default();
 
     Ok((content, input_tokens, output_tokens))
 }
@@ -227,6 +303,19 @@ pub async fn run_with_retry_and_breaker(
     circuit_breaker: &mut CircuitBreaker,
     provider: &str,
 ) -> Result<AgentResponse, AgentError> {
+    run_with_retry_and_breaker_streaming(client, model, request, circuit_breaker, provider, None)
+        .await
+}
+
+/// Run a provider call with retry logic, circuit breaker, and optional streaming callback.
+pub async fn run_with_retry_and_breaker_streaming(
+    client: &genai::Client,
+    model: &str,
+    request: &AgentRequest,
+    circuit_breaker: &mut CircuitBreaker,
+    provider: &str,
+    on_chunk: Option<&ChunkCallback>,
+) -> Result<AgentResponse, AgentError> {
     if !circuit_breaker.can_attempt() {
         return Err(AgentError::CircuitOpen {
             provider: provider.to_string(),
@@ -244,13 +333,15 @@ pub async fn run_with_retry_and_breaker(
         let mut last_error: Option<AgentError> = None;
 
         for attempt in 0..max_attempts {
-            let call_result = call_provider(
+            let chunk_cb = on_chunk.map(|c| c.as_ref() as &(dyn Fn(&str) + Send + Sync));
+            let call_result = call_provider_streaming(
                 client,
                 model,
                 &request.prompt,
                 request.context.as_deref(),
                 request.json_schema.as_ref(),
                 provider,
+                chunk_cb,
             )
             .await;
 

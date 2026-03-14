@@ -18,7 +18,7 @@ use crate::backend::AgentBackend;
 use crate::circuit_breaker::CircuitBreaker;
 use crate::error::AgentError;
 
-use super::{run_with_retry_and_breaker, ActorMessage};
+use super::{run_with_retry_and_breaker_streaming, ActorMessage};
 
 /// Configuration for constructing a GenericHandle.
 #[derive(Debug, Clone)]
@@ -46,12 +46,13 @@ struct GenericActor {
 impl GenericActor {
     async fn run(mut self) {
         while let Some(msg) = self.receiver.recv().await {
-            let result = run_with_retry_and_breaker(
+            let result = run_with_retry_and_breaker_streaming(
                 &self.client,
                 &self.model,
                 &msg.request,
                 &mut self.circuit_breaker,
                 &self.provider,
+                msg.on_chunk.as_ref(),
             )
             .await;
 
@@ -108,11 +109,20 @@ impl GenericHandle {
 #[async_trait]
 impl AgentBackend for GenericHandle {
     async fn send(&self, request: AgentRequest) -> Result<AgentResponse, AgentError> {
+        self.send_streaming(request, None).await
+    }
+
+    async fn send_streaming(
+        &self,
+        request: AgentRequest,
+        on_chunk: Option<crate::backend::ChunkCallback>,
+    ) -> Result<AgentResponse, AgentError> {
         let (tx, rx) = oneshot::channel();
         self.sender
             .send(ActorMessage {
                 request,
                 respond_to: tx,
+                on_chunk,
             })
             .await
             .map_err(|_| AgentError::ActorStopped)?;
