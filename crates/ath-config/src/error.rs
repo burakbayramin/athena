@@ -21,6 +21,15 @@ pub enum ConfigError {
     /// Could not determine the platform config directory.
     #[error("Could not determine config directory")]
     NoConfigDir,
+
+    /// Invalid agent configuration entry.
+    #[error("Invalid agent config at index {index}: {reason}")]
+    InvalidAgentConfig {
+        /// Zero-based index of the agent entry.
+        index: usize,
+        /// What's wrong with it.
+        reason: String,
+    },
 }
 
 impl ConfigError {
@@ -35,6 +44,9 @@ impl ConfigError {
             }
             ConfigError::NoConfigDir => {
                 "Set the HOME or XDG_CONFIG_HOME environment variable"
+            }
+            ConfigError::InvalidAgentConfig { .. } => {
+                "Check .ath/agents.toml — each [[agents]] entry needs provider, model, and api_key_env"
             }
         }
     }

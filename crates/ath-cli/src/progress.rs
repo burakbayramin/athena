@@ -3,7 +3,7 @@ use std::sync::Mutex;
 use std::time::Duration;
 
 use ath_orchestrator::progress::{ProgressEvent, ProgressObserver};
-use ath_types::agent::AgentKind;
+use ath_types::agent::AgentId;
 use indicatif::{ProgressBar, ProgressStyle};
 
 use crate::GlobalArgs;
@@ -25,7 +25,7 @@ enum TaskStatus {
 struct TaskEntry {
     name: String,
     status: TaskStatus,
-    agent: Option<AgentKind>,
+    agent: Option<AgentId>,
 }
 
 #[derive(Debug, Default)]
@@ -35,7 +35,7 @@ struct ReporterState {
     total_phases: usize,
     tasks: Vec<TaskEntry>,
     active_task: Option<String>,
-    active_agent: Option<AgentKind>,
+    active_agent: Option<AgentId>,
     snapshot: String,
     milestone_lines: Vec<String>,
     plain_lines: Vec<String>,
@@ -236,6 +236,19 @@ fn apply_event(state: &mut ReporterState, event: &ProgressEvent) {
             state.active_task = None;
             state.active_agent = None;
         }
+        ProgressEvent::PhaseRestored {
+            phase_name,
+            phase_index,
+            total_phases,
+            ..
+        } => {
+            state.phase_name = Some(phase_name.clone());
+            state.phase_index = *phase_index;
+            state.total_phases = *total_phases;
+            state.tasks.clear();
+            state.active_task = Some("restored from checkpoint".into());
+            state.active_agent = None;
+        }
         ProgressEvent::Transcript(_) => {}
     }
 
@@ -246,7 +259,7 @@ fn update_task(
     state: &mut ReporterState,
     task_name: &str,
     status: TaskStatus,
-    agent: Option<AgentKind>,
+    agent: Option<AgentId>,
 ) {
     if let Some(task) = state.tasks.iter_mut().find(|task| task.name == task_name) {
         task.status = status;
@@ -331,6 +344,9 @@ fn milestone_line(event: &ProgressEvent) -> Option<String> {
         )),
         ProgressEvent::PhaseCompleted { phase_name, .. } => {
             Some(format!("Phase complete: {phase_name}"))
+        }
+        ProgressEvent::PhaseRestored { phase_name, .. } => {
+            Some(format!("Phase restored from checkpoint: {phase_name}"))
         }
         ProgressEvent::Transcript(_) => None,
         _ => None,
@@ -430,11 +446,20 @@ fn plain_line(event: &ProgressEvent) -> Option<String> {
             "Phase {}/{} complete: {}",
             phase_index, total_phases, phase_name
         )),
+        ProgressEvent::PhaseRestored {
+            phase_name,
+            phase_index,
+            total_phases,
+            ..
+        } => Some(format!(
+            "Phase {}/{} restored from checkpoint: {}",
+            phase_index, total_phases, phase_name
+        )),
         ProgressEvent::Transcript(_) => None,
     }
 }
 
-fn format_agent(agent: &AgentKind) -> String {
+fn format_agent(agent: &AgentId) -> String {
     format!("{}/{}", agent.provider_name(), agent.model())
 }
 
@@ -458,7 +483,7 @@ mod tests {
             task_name: "route".into(),
             task_index: 1,
             total_tasks: 2,
-            agent: AgentKind::Claude("opus-4".into()),
+            agent: AgentId::claude("opus-4"),
         });
 
         let snapshot = reporter.snapshot();
@@ -473,20 +498,20 @@ mod tests {
         reporter.on_event(ProgressEvent::ReviewStarted {
             phase_id: 1,
             phase_name: "foundation".into(),
-            reviewer: AgentKind::Gemini("2.5-pro".into()),
+            reviewer: AgentId::gemini("2.5-pro"),
             attempt_number: 1,
         });
         reporter.on_event(ProgressEvent::ReviewFailed {
             phase_id: 1,
             phase_name: "foundation".into(),
-            reviewer: AgentKind::Gemini("2.5-pro".into()),
+            reviewer: AgentId::gemini("2.5-pro"),
             attempt_number: 1,
             reason_summary: "missing error handling".into(),
         });
         reporter.on_event(ProgressEvent::RetryStarted {
             phase_id: 1,
             phase_name: "foundation".into(),
-            reviewer: AgentKind::Gemini("2.5-pro".into()),
+            reviewer: AgentId::gemini("2.5-pro"),
             attempt_number: 2,
         });
 
@@ -516,7 +541,7 @@ mod tests {
             task_name: "route".into(),
             task_index: 1,
             total_tasks: 1,
-            agent: AgentKind::Claude("opus-4".into()),
+            agent: AgentId::claude("opus-4"),
         });
 
         let lines = reporter.plain_lines();

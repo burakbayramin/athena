@@ -1,4 +1,4 @@
-use ath_types::agent::AgentKind;
+use ath_types::agent::AgentId;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct UnsupportedPricing {
@@ -13,7 +13,7 @@ struct ModelPricing {
 }
 
 pub(crate) fn estimate_cost(
-    agent: &AgentKind,
+    agent: &AgentId,
     input_tokens: u64,
     output_tokens: u64,
 ) -> Result<f64, UnsupportedPricing> {
@@ -24,38 +24,47 @@ pub(crate) fn estimate_cost(
     )
 }
 
-fn pricing_for(agent: &AgentKind) -> Result<ModelPricing, UnsupportedPricing> {
-    match agent {
-        AgentKind::Claude(model) if matches!(model.as_str(), "opus-4" | "claude-opus-4") => {
-            Ok(ModelPricing {
+fn pricing_for(agent: &AgentId) -> Result<ModelPricing, UnsupportedPricing> {
+    let model = agent.model();
+
+    if agent.is_claude() {
+        match model {
+            "opus-4" | "claude-opus-4" => return Ok(ModelPricing {
                 input_per_million: 15.0,
                 output_per_million: 75.0,
-            })
-        }
-        AgentKind::Claude(model) if matches!(model.as_str(), "sonnet-4" | "claude-sonnet-4") => {
-            Ok(ModelPricing {
+            }),
+            "sonnet-4" | "claude-sonnet-4" => return Ok(ModelPricing {
                 input_per_million: 3.0,
                 output_per_million: 15.0,
-            })
+            }),
+            _ => {}
         }
-        // Gemini 2.5 Pro has tiered long-context pricing, but Athena's saved
-        // report data does not retain request-level context size. Use the
-        // standard <=200K-input-token rate explicitly as the base estimate.
-        AgentKind::Gemini(model) if matches!(model.as_str(), "2.5-pro" | "gemini-2.5-pro") => {
-            Ok(ModelPricing {
+    }
+
+    if agent.is_gemini() {
+        match model {
+            "2.5-pro" | "gemini-2.5-pro" => return Ok(ModelPricing {
+                // Gemini 2.5 Pro has tiered long-context pricing, but Athena's saved
+                // report data does not retain request-level context size. Use the
+                // standard <=200K-input-token rate explicitly as the base estimate.
                 input_per_million: 1.25,
                 output_per_million: 10.0,
-            })
+            }),
+            _ => {}
         }
-        AgentKind::Codex(model) if model == "o3" => Ok(ModelPricing {
+    }
+
+    if agent.is_codex() && model == "o3" {
+        return Ok(ModelPricing {
             input_per_million: 2.0,
             output_per_million: 8.0,
-        }),
-        other => Err(UnsupportedPricing {
-            provider: other.provider_name().to_string(),
-            model: other.model().to_string(),
-        }),
+        });
     }
+
+    Err(UnsupportedPricing {
+        provider: agent.provider_name().to_string(),
+        model: agent.model().to_string(),
+    })
 }
 
 #[cfg(test)]
@@ -65,11 +74,11 @@ mod tests {
     #[test]
     fn known_models_produce_deterministic_costs() {
         let claude_cost =
-            estimate_cost(&AgentKind::Claude("opus-4".into()), 1_000_000, 500_000).expect("claude");
-        let gemini_cost = estimate_cost(&AgentKind::Gemini("2.5-pro".into()), 1_000_000, 500_000)
+            estimate_cost(&AgentId::claude("opus-4"), 1_000_000, 500_000).expect("claude");
+        let gemini_cost = estimate_cost(&AgentId::gemini("2.5-pro"), 1_000_000, 500_000)
             .expect("gemini");
         let openai_cost =
-            estimate_cost(&AgentKind::Codex("o3".into()), 1_000_000, 500_000).expect("o3");
+            estimate_cost(&AgentId::codex("o3"), 1_000_000, 500_000).expect("o3");
 
         assert_eq!(claude_cost, 52.5);
         assert_eq!(gemini_cost, 6.25);
@@ -79,7 +88,7 @@ mod tests {
     #[test]
     fn unknown_models_return_explicit_unsupported_pricing() {
         let error =
-            estimate_cost(&AgentKind::Codex("unknown-model".into()), 1_000, 1_000).unwrap_err();
+            estimate_cost(&AgentId::codex("unknown-model"), 1_000, 1_000).unwrap_err();
 
         assert_eq!(
             error,

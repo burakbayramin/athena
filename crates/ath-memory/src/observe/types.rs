@@ -6,7 +6,7 @@
 //!
 //! `Observation` wraps an event with identity, run correlation, and a timestamp.
 
-use ath_types::{AgentKind, Severity, TokenUsage};
+use ath_types::{AgentId, Severity, TokenUsage};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
@@ -35,7 +35,7 @@ pub enum ObservationType {
     /// An agent was invoked with a prompt.
     AgentRequest {
         /// The agent that received the request.
-        agent: AgentKind,
+        agent: AgentId,
         /// Summary of the prompt (not the full prompt — no secrets).
         prompt_summary: String,
         /// The phase this occurred in, if applicable.
@@ -47,7 +47,7 @@ pub enum ObservationType {
     /// An agent returned a response.
     AgentResponse {
         /// The agent that produced the response.
-        agent: AgentKind,
+        agent: AgentId,
         /// Token usage for this interaction.
         token_usage: TokenUsage,
         /// The phase this occurred in, if applicable.
@@ -59,7 +59,7 @@ pub enum ObservationType {
     /// A review verdict was issued.
     ReviewVerdict {
         /// The agent that performed the review.
-        reviewer: AgentKind,
+        reviewer: AgentId,
         /// Whether the review passed.
         passed: bool,
         /// Severity of the finding.
@@ -105,7 +105,7 @@ pub enum ObservationType {
     /// A routing decision was made by the orchestrator.
     RoutingDecision {
         /// The agent selected for the task.
-        agent: AgentKind,
+        agent: AgentId,
         /// The task being routed.
         task_name: String,
         /// Reason for the routing decision.
@@ -136,7 +136,7 @@ pub struct Observation {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use ath_types::AgentKind;
+    use ath_types::AgentId;
 
     /// Helper: round-trip serialize → deserialize and assert equality.
     fn assert_round_trip(event: ObservationType) {
@@ -155,7 +155,7 @@ mod tests {
     #[test]
     fn round_trip_agent_request() {
         assert_round_trip(ObservationType::AgentRequest {
-            agent: AgentKind::Claude("opus-4".into()),
+            agent: AgentId::claude("opus-4"),
             prompt_summary: "Analyze authentication module".into(),
             phase_id: Some(1),
             task_name: Some("auth-analysis".into()),
@@ -165,7 +165,7 @@ mod tests {
     #[test]
     fn round_trip_agent_response() {
         assert_round_trip(ObservationType::AgentResponse {
-            agent: AgentKind::Gemini("2.5-pro".into()),
+            agent: AgentId::gemini("2.5-pro"),
             token_usage: TokenUsage {
                 input_tokens: 5000,
                 output_tokens: 2000,
@@ -179,7 +179,7 @@ mod tests {
     #[test]
     fn round_trip_review_verdict() {
         assert_round_trip(ObservationType::ReviewVerdict {
-            reviewer: AgentKind::Codex("o3".into()),
+            reviewer: AgentId::codex("o3"),
             passed: false,
             severity: Severity::Critical,
             reason_summary: "Missing error handling in auth flow".into(),
@@ -218,7 +218,7 @@ mod tests {
     #[test]
     fn round_trip_routing_decision() {
         assert_round_trip(ObservationType::RoutingDecision {
-            agent: AgentKind::Claude("opus-4".into()),
+            agent: AgentId::claude("opus-4"),
             task_name: "security-audit".into(),
             reason: "Claude best suited for security analysis".into(),
             phase_id: Some(1),
@@ -246,7 +246,7 @@ mod tests {
     #[test]
     fn internally_tagged_type_field_present() {
         let event = ObservationType::AgentRequest {
-            agent: AgentKind::Claude("opus-4".into()),
+            agent: AgentId::claude("opus-4"),
             prompt_summary: "test".into(),
             phase_id: None,
             task_name: None,

@@ -25,6 +25,7 @@
 | REQ-MEM-CLI | CLI inspection, search, and manual memory entry | 6 subcommands with 21 passing tests (S05) | M002 |
 | REQ-MEM-BUDGET | Token budget enforcement for injected context | InjectionConfig with configurable limits, 13 injector tests (S04) | M002 |
 | REQ-MEM-KEYWORD | Keyword fallback when no embedding API available | KeywordIndex with TF scoring, 7 tests, full system works without embedding (S01) | M002 |
+| REQ-RESUME | Resumable execution from last completed phase | Checkpoint-based resume with integration tests, --fresh/--status CLI flags (S01-S03) | M003 |
 
 ## Out of Scope
 
@@ -35,7 +36,7 @@
 | REQ-PR-WORKFLOW | PR-based workflow | Direct commits to local repo |
 | REQ-MOBILE | Mobile app | CLI distribution only |
 | REQ-COLLAB | Real-time collaboration | Single-user tool |
-| REQ-RESUME | Resumable execution from last completed phase | v2 scope |
+
 | REQ-PLUGINS | Plugin system for custom agent definitions | v2 scope |
 | REQ-LOCAL-MODELS | Support for local/self-hosted models | v2 scope |
 | REQ-CROSS-PROJECT-MEM | Cross-project memory sharing | v3 scope |

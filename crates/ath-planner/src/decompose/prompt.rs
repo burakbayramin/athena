@@ -3,7 +3,7 @@
 //! Provides the system prompt, JSON schema, and request builder for
 //! decomposing a ProjectSpec into phases via Claude.
 
-use ath_types::agent::{AgentKind, AgentRequest};
+use ath_types::agent::{AgentId, AgentRequest};
 use ath_types::project::ProjectSpec;
 use chrono::Utc;
 use uuid::Uuid;
@@ -98,7 +98,7 @@ pub fn build_decompose_request(project: &ProjectSpec, last_error: Option<&str>) 
 
     AgentRequest {
         id: Uuid::new_v4(),
-        agent: AgentKind::Claude("decompose".into()),
+        agent: AgentId::claude("decompose"),
         prompt,
         context: Some(DECOMPOSE_SYSTEM_PROMPT.to_string()),
         json_schema: Some(execution_plan_json_schema()),
@@ -149,7 +149,7 @@ mod tests {
         assert!(req.prompt.contains("Build the API"));
         assert_eq!(req.context.as_deref(), Some(DECOMPOSE_SYSTEM_PROMPT));
         assert!(req.json_schema.is_some());
-        assert!(matches!(req.agent, AgentKind::Claude(ref m) if m == "decompose"));
+        assert!(req.agent.is_claude() && req.agent.model() == "decompose");
     }
 
     #[test]

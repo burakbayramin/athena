@@ -118,7 +118,7 @@ impl AgentBackend for GeminiHandle {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use ath_types::agent::AgentKind;
+    use ath_types::agent::AgentId;
 
     fn config_without_google_key() -> ConfigStore {
         ConfigStore {
@@ -128,6 +128,7 @@ mod tests {
             claude_model: "opus-4".to_string(),
             gemini_model: "2.5-pro".to_string(),
             codex_model: "o3".to_string(),
+            agents: ath_config::AgentsConfig::default(),
         }
     }
 
@@ -139,6 +140,7 @@ mod tests {
             claude_model: "opus-4".to_string(),
             gemini_model: "2.5-pro".to_string(),
             codex_model: "o3".to_string(),
+            agents: ath_config::AgentsConfig::default(),
         }
     }
 
@@ -179,7 +181,7 @@ mod tests {
 
         let request = AgentRequest {
             id: uuid::Uuid::new_v4(),
-            agent: AgentKind::Gemini("2.5-pro".to_string()),
+            agent: AgentId::gemini("2.5-pro".to_string()),
             prompt: "test".to_string(),
             context: None,
             json_schema: None,

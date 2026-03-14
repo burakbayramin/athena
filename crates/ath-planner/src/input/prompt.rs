@@ -3,7 +3,7 @@
 //! Provides system prompts, JSON schema generation, and AgentRequest builders
 //! for natural language, spec file, and codebase input modes.
 
-use ath_types::agent::{AgentKind, AgentRequest};
+use ath_types::agent::{AgentId, AgentRequest};
 use chrono::Utc;
 use uuid::Uuid;
 
@@ -96,7 +96,7 @@ pub fn build_natural_language_request(description: &str, last_error: Option<&str
 
     AgentRequest {
         id: Uuid::new_v4(),
-        agent: AgentKind::Claude("opus-4".into()),
+        agent: AgentId::claude("opus-4"),
         prompt,
         context: Some(SYSTEM_PROMPT.to_string()),
         json_schema: Some(project_spec_json_schema()),
@@ -118,7 +118,7 @@ pub fn build_spec_file_request(content: &str, last_error: Option<&str>) -> Agent
 
     AgentRequest {
         id: Uuid::new_v4(),
-        agent: AgentKind::Claude("opus-4".into()),
+        agent: AgentId::claude("opus-4"),
         prompt,
         context: Some(SPEC_FILE_SYSTEM_PROMPT.to_string()),
         json_schema: Some(project_spec_json_schema()),
@@ -157,7 +157,7 @@ pub fn build_codebase_request(
 
     AgentRequest {
         id: Uuid::new_v4(),
-        agent: AgentKind::Claude("opus-4".into()),
+        agent: AgentId::claude("opus-4"),
         prompt,
         context: Some(CODEBASE_SYSTEM_PROMPT.to_string()),
         json_schema: Some(project_spec_json_schema()),

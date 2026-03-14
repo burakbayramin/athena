@@ -3,7 +3,7 @@
 //! Builds well-formed commit messages with the `athena:` prefix and structured
 //! metadata trailers (Phase, Agent, Task-Id, Files-Count, optional Review-Status/Reviewer).
 
-use ath_types::agent::AgentKind;
+use ath_types::agent::AgentId;
 use ath_types::review::ReviewVerdict;
 
 /// Metadata for building a commit message with trailers.
@@ -29,7 +29,7 @@ impl CommitMetadata {
     /// Construct metadata from phase data, agent kind, and optional review verdict.
     pub fn from_phase_data(
         phase_name: impl Into<String>,
-        agent: &AgentKind,
+        agent: &AgentId,
         task_id: impl Into<String>,
         files_count: usize,
         review: Option<&ReviewVerdict>,
@@ -151,7 +151,7 @@ mod tests {
 
     #[test]
     fn from_phase_data_extracts_agent_info() {
-        let agent = AgentKind::Claude("opus-4".to_string());
+        let agent = AgentId::claude("opus-4".to_string());
         let meta = CommitMetadata::from_phase_data("test-phase", &agent, "task-42", 5, None);
 
         assert_eq!(meta.phase_name, "test-phase");
@@ -167,10 +167,10 @@ mod tests {
     fn from_phase_data_extracts_review_verdict() {
         use ath_types::review::{ReviewVerdict, Severity};
 
-        let agent = AgentKind::Claude("opus-4".to_string());
+        let agent = AgentId::claude("opus-4".to_string());
         let verdict = ReviewVerdict {
             passed: true,
-            reviewer: AgentKind::Gemini("2.5-pro".to_string()),
+            reviewer: AgentId::gemini("2.5-pro".to_string()),
             severity: Severity::Info,
             reason: "All good".to_string(),
             suggestions: vec![],

@@ -5,6 +5,7 @@
 
 use std::path::PathBuf;
 
+use crate::agents::{self, AgentsConfig};
 use crate::env;
 use crate::error::ConfigError;
 use crate::file::{self, RawFileConfig};
@@ -34,6 +35,8 @@ pub struct ConfigStore {
     pub gemini_model: String,
     /// Codex model selection (defaults to "o3").
     pub codex_model: String,
+    /// Agent definitions (from `.ath/agents.toml` or defaults).
+    pub agents: AgentsConfig,
 }
 
 impl ConfigStore {
@@ -54,7 +57,24 @@ impl ConfigStore {
 
         let env_config = env::load_env_config();
 
-        Ok(Self::load_from_layers(global, local, env_config))
+        let mut store = Self::load_from_layers(global, local, env_config);
+
+        // Load agents config: .ath/agents.toml if it exists, otherwise defaults
+        let agents_path = std::path::Path::new(".ath").join("agents.toml");
+        store.agents = if agents_path.exists() {
+            AgentsConfig::load(&agents_path)?
+        } else {
+            agents::default_agents_from_config(
+                store.anthropic_api_key.as_deref(),
+                store.google_api_key.as_deref(),
+                store.openai_api_key.as_deref(),
+                &store.claude_model,
+                &store.gemini_model,
+                &store.codex_model,
+            )
+        };
+
+        Ok(store)
     }
 
     /// Merge configuration from pre-loaded layers.
@@ -110,6 +130,15 @@ impl ConfigStore {
             .unwrap_or(DEFAULT_CODEX_MODEL)
             .to_string();
 
+        let agents = agents::default_agents_from_config(
+            anthropic_api_key.as_deref(),
+            google_api_key.as_deref(),
+            openai_api_key.as_deref(),
+            &claude_model,
+            &gemini_model,
+            &codex_model,
+        );
+
         Self {
             anthropic_api_key,
             google_api_key,
@@ -117,6 +146,7 @@ impl ConfigStore {
             claude_model,
             gemini_model,
             codex_model,
+            agents,
         }
     }
 

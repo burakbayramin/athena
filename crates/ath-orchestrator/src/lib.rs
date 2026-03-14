@@ -6,6 +6,7 @@
 //! collects results, triggers reviews, and maintains the
 //! complete audit trail of a project run.
 
+pub mod checkpoint;
 pub mod coordinator;
 pub mod error;
 pub mod isolation;

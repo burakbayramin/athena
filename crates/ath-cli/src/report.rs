@@ -364,7 +364,7 @@ mod tests {
     fn render_report_marks_unknown_pricing_as_not_available() {
         let mut report = sample_report("run-unknown");
         report.phase_records[0].contributions[0].agent =
-            ath_types::agent::AgentKind::Codex("unknown-model".into());
+            ath_types::agent::AgentId::codex("unknown-model");
 
         let built = build_run_report(&report.plan, &report.phase_records);
         let output = render_report(&built);
@@ -390,7 +390,7 @@ mod tests {
                 completed_at: Some(chrono::Utc::now()),
                 contributions: vec![
                     ath_types::phase::AgentContribution {
-                        agent: ath_types::agent::AgentKind::Claude("opus-4".into()),
+                        agent: ath_types::agent::AgentId::claude("opus-4"),
                         tokens: ath_types::phase::TokenUsage {
                             input_tokens: 100,
                             output_tokens: 20,
@@ -399,7 +399,7 @@ mod tests {
                         files_produced: vec!["src/lib.rs".into()],
                     },
                     ath_types::phase::AgentContribution {
-                        agent: ath_types::agent::AgentKind::Gemini("2.5-pro".into()),
+                        agent: ath_types::agent::AgentId::gemini("2.5-pro"),
                         tokens: ath_types::phase::TokenUsage {
                             input_tokens: 25,
                             output_tokens: 30,
@@ -412,7 +412,7 @@ mod tests {
                     attempt_number: 1,
                     verdict: ReviewVerdict {
                         passed: true,
-                        reviewer: ath_types::agent::AgentKind::Gemini("2.5-pro".into()),
+                        reviewer: ath_types::agent::AgentId::gemini("2.5-pro"),
                         severity: Severity::Info,
                         reason: "Looks good".into(),
                         suggestions: vec![],

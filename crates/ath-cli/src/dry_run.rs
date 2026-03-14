@@ -53,7 +53,7 @@ pub(crate) fn execute(project_dir: &Path) -> Result<()> {
 mod tests {
     use super::*;
     use crate::{run, GlobalArgs};
-    use ath_types::agent::AgentKind;
+    use ath_types::agent::AgentId;
     use ath_types::plan::{PhaseSpec, TaskSpec};
     use ath_types::project::SkillTag;
     use std::sync::Mutex;
@@ -68,7 +68,7 @@ mod tests {
         }
     }
 
-    fn make_task(name: &str, agent: AgentKind) -> TaskSpec {
+    fn make_task(name: &str, agent: AgentId) -> TaskSpec {
         TaskSpec {
             name: name.into(),
             description: format!("{name} description"),
@@ -86,7 +86,7 @@ mod tests {
                 id: 1,
                 name: "Foundation".into(),
                 description: "Set up the project".into(),
-                tasks: vec![make_task("Bootstrap", AgentKind::Claude("opus-4".into()))],
+                tasks: vec![make_task("Bootstrap", AgentId::claude("opus-4"))],
                 depends_on: vec![],
                 produces: vec!["project-structure".into()],
                 consumes: vec![],
@@ -142,6 +142,8 @@ mod tests {
             spec: None,
             codebase: None,
             dry_run: true,
+            fresh: false,
+            status: false,
         };
 
         let result = run::run_command(
@@ -172,6 +174,8 @@ mod tests {
             spec: None,
             codebase: None,
             dry_run: true,
+            fresh: false,
+            status: false,
         };
 
         let err = run::run_command(

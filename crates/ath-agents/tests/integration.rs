@@ -10,12 +10,12 @@ use ath_agents::{
     AgentBackend, AgentError, CircuitBreaker, ClaudeHandle, CodexHandle, GeminiHandle, MockBackend,
 };
 use ath_config::ConfigStore;
-use ath_types::agent::{AgentKind, AgentRequest, AgentResponse};
+use ath_types::agent::{AgentId, AgentRequest, AgentResponse};
 use chrono::Utc;
 use uuid::Uuid;
 
 /// Helper: create a valid AgentRequest for a given agent kind.
-fn make_request(agent: AgentKind) -> AgentRequest {
+fn make_request(agent: AgentId) -> AgentRequest {
     AgentRequest {
         id: Uuid::new_v4(),
         agent,
@@ -30,7 +30,7 @@ fn make_request(agent: AgentKind) -> AgentRequest {
 fn make_response(request_id: Uuid, content: &str) -> AgentResponse {
     AgentResponse {
         request_id,
-        agent: AgentKind::Claude("mock".into()),
+        agent: AgentId::claude("mock"),
         content: content.into(),
         input_tokens: 10,
         output_tokens: 5,
@@ -47,6 +47,7 @@ fn config_no_keys() -> ConfigStore {
         claude_model: "opus-4".into(),
         gemini_model: "2.5-pro".into(),
         codex_model: "o3".into(),
+        agents: ath_config::AgentsConfig::default(),
     }
 }
 
@@ -57,7 +58,7 @@ fn config_no_keys() -> ConfigStore {
 #[tokio::test]
 async fn mock_always_ok_returns_correct_content() {
     let backend = MockBackend::always_ok("hello world");
-    let request = make_request(AgentKind::Claude("opus-4".into()));
+    let request = make_request(AgentId::claude("opus-4"));
     let response = backend.send(request).await.unwrap();
     assert_eq!(response.content, "hello world");
 }
@@ -77,7 +78,7 @@ async fn mock_always_ok_provider_name() {
 #[tokio::test]
 async fn mock_always_ok_request_id_matches() {
     let backend = MockBackend::always_ok("test");
-    let request = make_request(AgentKind::Gemini("2.5-pro".into()));
+    let request = make_request(AgentId::gemini("2.5-pro"));
     let req_id = request.id;
     let response = backend.send(request).await.unwrap();
     assert_eq!(response.request_id, req_id);
@@ -89,9 +90,9 @@ async fn mock_always_ok_request_id_matches() {
 
 #[tokio::test]
 async fn mock_sequenced_returns_in_order() {
-    let req1 = make_request(AgentKind::Claude("opus-4".into()));
-    let req2 = make_request(AgentKind::Claude("opus-4".into()));
-    let req3 = make_request(AgentKind::Claude("opus-4".into()));
+    let req1 = make_request(AgentId::claude("opus-4"));
+    let req2 = make_request(AgentId::claude("opus-4"));
+    let req3 = make_request(AgentId::claude("opus-4"));
 
     let resp1 = make_response(req1.id, "first");
     let resp2_err = AgentError::ServerError {
@@ -127,7 +128,7 @@ async fn mock_failing_returns_expected_error() {
     });
 
     let result = backend
-        .send(make_request(AgentKind::Claude("opus-4".into())))
+        .send(make_request(AgentId::claude("opus-4")))
         .await;
     assert!(result.is_err());
     let err = result.unwrap_err();
@@ -144,7 +145,7 @@ async fn mock_failing_returns_expected_error() {
 #[tokio::test]
 async fn dyn_dispatch_works_through_trait_object() {
     let backend: Box<dyn AgentBackend> = Box::new(MockBackend::always_ok("dynamic"));
-    let request = make_request(AgentKind::Claude("opus-4".into()));
+    let request = make_request(AgentId::claude("opus-4"));
     let response = backend.send(request).await.unwrap();
     assert_eq!(response.content, "dynamic");
 }
@@ -171,7 +172,7 @@ async fn multiple_dyn_backends_in_vec() {
     ];
 
     for backend in &backends {
-        let request = make_request(AgentKind::Claude("test".into()));
+        let request = make_request(AgentId::claude("test"));
         let response = backend.send(request).await.unwrap();
         assert!(!response.content.is_empty());
     }

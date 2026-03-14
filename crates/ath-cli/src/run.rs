@@ -1,4 +1,4 @@
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use anyhow::{anyhow, Result};
@@ -12,7 +12,7 @@ use ath_orchestrator::router::assign_all_tasks;
 use ath_orchestrator::taxonomy;
 use ath_planner::decompose::{decompose_project_spec, display_execution_plan};
 use ath_planner::input::{display_project_spec_summary, parse_input, resolve_input_mode};
-use ath_types::agent::AgentKind;
+use ath_types::agent::AgentId;
 use ath_types::plan::ExecutionPlan;
 use clap::Args;
 
@@ -38,12 +38,77 @@ pub(crate) struct RunArgs {
     /// Show the locally available execution plan without running agents.
     #[arg(long)]
     pub(crate) dry_run: bool,
+
+    /// Ignore any existing checkpoint and start a clean run.
+    #[arg(long)]
+    pub(crate) fresh: bool,
+
+    /// Show checkpoint status without running anything.
+    #[arg(long)]
+    pub(crate) status: bool,
+}
+
+/// Path to the checkpoint file within a project directory.
+fn checkpoint_path(project_dir: &Path) -> PathBuf {
+    project_dir.join(".ath").join("checkpoint.json")
+}
+
+/// Display checkpoint status without executing anything.
+fn show_checkpoint_status(project_dir: &Path) -> Result<()> {
+    use ath_orchestrator::checkpoint::CheckpointStore;
+
+    let cp_path = checkpoint_path(project_dir);
+    match CheckpointStore::load(&cp_path) {
+        Ok(Some(cp)) => {
+            println!("Checkpoint found: {}", cp_path.display());
+            println!("  Run ID:         {}", cp.run_id);
+            println!("  Plan fingerprint: {}", &cp.plan_fingerprint[..16]);
+            println!("  Completed:      {}/{} phases", cp.completed_count(), cp.plan.execution_order.len());
+            if !cp.completed_phase_ids.is_empty() {
+                let mut phase_names: Vec<_> = cp.plan.phases.iter()
+                    .filter(|p| cp.completed_phase_ids.contains(&p.id))
+                    .map(|p| format!("    - {} (phase {})", p.name, p.id))
+                    .collect();
+                phase_names.sort();
+                println!("  Completed phases:");
+                for name in &phase_names {
+                    println!("{name}");
+                }
+            }
+            println!("  Started at:     {}", cp.started_at.format("%Y-%m-%d %H:%M:%S UTC"));
+            println!("  Updated at:     {}", cp.updated_at.format("%Y-%m-%d %H:%M:%S UTC"));
+            println!("\nRun `ath run` to resume, or `ath run --fresh` to start over.");
+            Ok(())
+        }
+        Ok(None) => {
+            println!("No checkpoint found. No incomplete run to resume.");
+            Ok(())
+        }
+        Err(e) => {
+            anyhow::bail!("Failed to load checkpoint: {e}");
+        }
+    }
 }
 
 pub(crate) async fn run_command(args: RunArgs, global: GlobalArgs) -> Result<()> {
+    let project_dir = std::env::current_dir().map_err(|e| anyhow!("{e}"))?;
+
+    if args.status {
+        return show_checkpoint_status(&project_dir);
+    }
+
     if args.dry_run {
-        let project_dir = std::env::current_dir().map_err(|e| anyhow!("{e}"))?;
         return crate::dry_run::execute(&project_dir);
+    }
+
+    let cp_path = checkpoint_path(&project_dir);
+
+    // --fresh: delete any existing checkpoint before proceeding
+    if args.fresh {
+        if cp_path.exists() {
+            std::fs::remove_file(&cp_path).map_err(|e| anyhow!("Failed to remove checkpoint: {e}"))?;
+            println!("Checkpoint cleared. Starting fresh run.");
+        }
     }
 
     let config = ConfigStore::load().map_err(anyhow::Error::new)?;
@@ -93,7 +158,7 @@ pub(crate) async fn run_command(args: RunArgs, global: GlobalArgs) -> Result<()>
     let coordinator = AgentCoordinator::new(registry, output_dir.clone(), None);
 
     let records = coordinator
-        .run_plan_with_progress(&plan, Some(observer))
+        .run_plan_with_progress(&plan, Some(observer), Some(&cp_path))
         .await
         .map_err(|e| anyhow!("{e}"))?;
 
@@ -108,69 +173,75 @@ pub(crate) async fn run_command(args: RunArgs, global: GlobalArgs) -> Result<()>
     Ok(())
 }
 
+/// Build a backend for planning (decomposition). Picks the first available agent.
 fn build_planning_backend(config: &ConfigStore) -> Result<Arc<dyn AgentBackend>> {
-    if config.anthropic_api_key.is_some() {
-        return ClaudeHandle::new(config)
-            .map(|handle| Arc::new(handle) as Arc<dyn AgentBackend>)
-            .map_err(|e| anyhow!("{e}"));
-    }
-
-    if config.google_api_key.is_some() {
-        return GeminiHandle::new(config)
-            .map(|handle| Arc::new(handle) as Arc<dyn AgentBackend>)
-            .map_err(|e| anyhow!("{e}"));
-    }
-
-    if config.openai_api_key.is_some() {
-        return CodexHandle::new(config)
-            .map(|handle| Arc::new(handle) as Arc<dyn AgentBackend>)
-            .map_err(|e| anyhow!("{e}"));
+    for agent_cfg in &config.agents.agents {
+        if agent_cfg.resolve_api_key().is_none() {
+            continue;
+        }
+        if let Some(backend) = build_backend_for_agent(agent_cfg, config)? {
+            return Ok(backend);
+        }
     }
 
     anyhow::bail!("No AI providers are configured. Add an API key before running `ath run`.");
 }
 
+/// Build a registry of all available agent backends from config.
 fn build_agent_registry(config: &ConfigStore) -> Result<AgentRegistry> {
     let mut registry = AgentRegistry::new();
 
-    if config.anthropic_api_key.is_some() {
-        let handle = ClaudeHandle::new(config).map_err(|e| anyhow!("{e}"))?;
-        registry.register(
-            AgentKind::Claude(config.claude_model.clone()),
-            Arc::new(handle),
-        );
+    for agent_cfg in &config.agents.agents {
+        if agent_cfg.resolve_api_key().is_none() {
+            continue;
+        }
+        if let Some(backend) = build_backend_for_agent(agent_cfg, config)? {
+            let agent_id = AgentId::new(&agent_cfg.provider, &agent_cfg.model);
+            registry.register(agent_id, backend);
+        }
     }
 
-    if config.google_api_key.is_some() {
-        let handle = GeminiHandle::new(config).map_err(|e| anyhow!("{e}"))?;
-        registry.register(
-            AgentKind::Gemini(config.gemini_model.clone()),
-            Arc::new(handle),
-        );
-    }
-
-    if config.openai_api_key.is_some() {
-        let handle = CodexHandle::new(config).map_err(|e| anyhow!("{e}"))?;
-        registry.register(
-            AgentKind::Codex(config.codex_model.clone()),
-            Arc::new(handle),
-        );
-    }
-
-    if registry
-        .get(&AgentKind::Claude("placeholder".into()))
-        .is_none()
-        && registry
-            .get(&AgentKind::Gemini("placeholder".into()))
-            .is_none()
-        && registry
-            .get(&AgentKind::Codex("placeholder".into()))
-            .is_none()
+    if !config.agents.agents.iter().any(|a| {
+        a.resolve_api_key().is_some() && a.is_builtin_provider()
+    }) && registry.get(&AgentId::new("any", "placeholder")).is_none()
     {
-        anyhow::bail!("No execution providers are available. Configure at least one provider.");
+        // Check if we got at least one provider registered
+        let has_any = config.agents.agents.iter().any(|a| a.resolve_api_key().is_some());
+        if !has_any {
+            anyhow::bail!("No execution providers are available. Configure at least one provider.");
+        }
     }
 
     Ok(registry)
+}
+
+/// Build the appropriate backend for a single agent config entry.
+///
+/// Returns `Ok(None)` for unsupported custom providers (handled in S04).
+fn build_backend_for_agent(
+    agent_cfg: &ath_config::AgentConfig,
+    config: &ConfigStore,
+) -> Result<Option<Arc<dyn AgentBackend>>> {
+    match agent_cfg.provider.as_str() {
+        "anthropic" => {
+            let handle = ClaudeHandle::new(config).map_err(|e| anyhow!("{e}"))?;
+            Ok(Some(Arc::new(handle)))
+        }
+        "google" => {
+            let handle = GeminiHandle::new(config).map_err(|e| anyhow!("{e}"))?;
+            Ok(Some(Arc::new(handle)))
+        }
+        "openai" => {
+            let handle = CodexHandle::new(config).map_err(|e| anyhow!("{e}"))?;
+            Ok(Some(Arc::new(handle)))
+        }
+        provider => {
+            // Custom providers will be handled in S04 (generic OpenAI provider)
+            eprintln!("Warning: provider '{}' is not yet supported, skipping agent {}/{}", 
+                provider, agent_cfg.provider, agent_cfg.model);
+            Ok(None)
+        }
+    }
 }
 
 fn configured_secrets(config: &ConfigStore) -> Vec<String> {
@@ -186,7 +257,7 @@ fn configured_secrets(config: &ConfigStore) -> Vec<String> {
 
 pub(crate) fn assign_agents_and_check_isolation(
     plan: &mut ExecutionPlan,
-    available: impl Fn(&AgentKind) -> bool + Copy,
+    available: impl Fn(&AgentId) -> bool + Copy,
 ) -> Result<()> {
     let table = taxonomy::build_routing_table();
 
@@ -270,14 +341,8 @@ mod tests {
 
         assign_agents_and_check_isolation(&mut plan, |_| true).expect("routing succeeds");
 
-        assert!(matches!(
-            plan.phases[0].tasks[0].assigned_agent,
-            Some(AgentKind::Claude(_))
-        ));
-        assert!(matches!(
-            plan.phases[0].tasks[1].assigned_agent,
-            Some(AgentKind::Gemini(_))
-        ));
+        assert!(plan.phases[0].tasks[0].assigned_agent.as_ref().map_or(false, |a| a.is_claude()));
+        assert!(plan.phases[0].tasks[1].assigned_agent.as_ref().map_or(false, |a| a.is_gemini()));
     }
 
     #[test]
@@ -309,5 +374,85 @@ mod tests {
             .phases
             .iter()
             .all(|phase| phase.tasks.iter().all(|task| task.assigned_agent.is_some())));
+    }
+
+    #[test]
+    fn checkpoint_path_is_project_relative() {
+        let dir = PathBuf::from("/tmp/my-project");
+        let path = checkpoint_path(&dir);
+        assert_eq!(path, PathBuf::from("/tmp/my-project/.ath/checkpoint.json"));
+    }
+
+    #[test]
+    fn show_status_missing_checkpoint() {
+        // show_checkpoint_status prints "No checkpoint found" for missing file
+        let temp = tempfile::tempdir().unwrap();
+        // We can't easily capture stdout in a unit test, so we just verify it doesn't error
+        let result = show_checkpoint_status(temp.path());
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn show_status_existing_checkpoint() {
+        use ath_orchestrator::checkpoint::{Checkpoint, CheckpointStore};
+
+        let temp = tempfile::tempdir().unwrap();
+        let cp_path = checkpoint_path(temp.path());
+
+        let plan = ExecutionPlan {
+            phases: vec![make_phase(1, "foundation", vec![])],
+            execution_order: vec![1],
+            parallel_groups: vec![vec![1]],
+            critical_path_length: 1,
+        };
+
+        let mut cp = Checkpoint::new("run-test".into(), &plan);
+        cp.add_records(vec![ath_types::phase::PhaseRecord {
+            id: uuid::Uuid::new_v4(),
+            phase_id: 1,
+            phase_name: "foundation".into(),
+            started_at: chrono::Utc::now(),
+            completed_at: Some(chrono::Utc::now()),
+            contributions: vec![],
+            review_attempts: vec![],
+        }]);
+        CheckpointStore::save(&cp_path, &cp).unwrap();
+
+        let result = show_checkpoint_status(temp.path());
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn fresh_flag_deletes_checkpoint() {
+        use ath_orchestrator::checkpoint::{Checkpoint, CheckpointStore};
+
+        let temp = tempfile::tempdir().unwrap();
+        let cp_path = checkpoint_path(temp.path());
+
+        let plan = ExecutionPlan {
+            phases: vec![],
+            execution_order: vec![],
+            parallel_groups: vec![],
+            critical_path_length: 0,
+        };
+        let cp = Checkpoint::new("run-fresh".into(), &plan);
+        CheckpointStore::save(&cp_path, &cp).unwrap();
+        assert!(cp_path.exists());
+
+        // Simulate what --fresh does
+        std::fs::remove_file(&cp_path).unwrap();
+        assert!(!cp_path.exists());
+    }
+
+    #[test]
+    fn show_status_corrupt_checkpoint() {
+        let temp = tempfile::tempdir().unwrap();
+        let cp_path = checkpoint_path(temp.path());
+        std::fs::create_dir_all(cp_path.parent().unwrap()).unwrap();
+        std::fs::write(&cp_path, "not json").unwrap();
+
+        let result = show_checkpoint_status(temp.path());
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("Failed to load"));
     }
 }

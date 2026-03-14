@@ -142,7 +142,7 @@ mod tests {
     use super::*;
     use crate::observe::storage::ObservationReader;
     use crate::observe::types::FileOpKind;
-    use ath_types::{AgentKind, Severity, TokenUsage};
+    use ath_types::{AgentId, Severity, TokenUsage};
     use tempfile::TempDir;
 
     fn make_event(index: u32) -> ObservationType {
@@ -246,13 +246,13 @@ mod tests {
         let buf = ObservationBuffer::new(run_id);
 
         buf.record(ObservationType::AgentRequest {
-            agent: AgentKind::Claude("opus-4".into()),
+            agent: AgentId::claude("opus-4"),
             prompt_summary: "test".into(),
             phase_id: Some(1),
             task_name: None,
         });
         buf.record(ObservationType::AgentResponse {
-            agent: AgentKind::Gemini("2.5-pro".into()),
+            agent: AgentId::gemini("2.5-pro"),
             token_usage: TokenUsage {
                 input_tokens: 100,
                 output_tokens: 50,
@@ -262,7 +262,7 @@ mod tests {
             task_name: Some("gen".into()),
         });
         buf.record(ObservationType::ReviewVerdict {
-            reviewer: AgentKind::Codex("o3".into()),
+            reviewer: AgentId::codex("o3"),
             passed: true,
             severity: Severity::Info,
             reason_summary: "ok".into(),
@@ -285,7 +285,7 @@ mod tests {
             severity: Severity::Critical,
         });
         buf.record(ObservationType::RoutingDecision {
-            agent: AgentKind::Claude("opus-4".into()),
+            agent: AgentId::claude("opus-4"),
             task_name: "task".into(),
             reason: "because".into(),
             phase_id: Some(3),

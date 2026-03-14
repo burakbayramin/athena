@@ -31,6 +31,7 @@ Intelligent phase analysis — breaking any software project into well-structure
 - ✓ CLI inspection, search, and manual memory entry — M002
 - ✓ Token budget enforcement for injected context — M002
 - ✓ Keyword fallback when no embedding API is available — M002
+- ✓ Resumable execution from last completed phase group — M003
 
 ### Out of Scope
 
@@ -39,7 +40,6 @@ Intelligent phase analysis — breaking any software project into well-structure
 - PR-based workflow — direct commits to local repo
 - Mobile app — CLI distribution only
 - Real-time collaboration — single-user tool
-- Resumable execution from last completed phase — v2 scope
 - Plugin system for custom agent definitions — v2 scope
 - Support for local/self-hosted models (Ollama, etc.) — v2 scope
 
@@ -47,7 +47,8 @@ Intelligent phase analysis — breaking any software project into well-structure
 
 Shipped v1.0 MVP with 16,315 lines of Rust across 7 crates (58 source files, 415 tests).
 Milestone M001 (Migration) completed 2026-03-13 — all 10 slices delivered, all 14 requirements validated.
-Milestone M002 (Memory Layer) completed 2026-03-14 — all 6 slices delivered, 5 requirements validated. 588 tests passing.
+Milestone M002 (Memory Layer) completed 2026-03-14 — all 6 slices delivered, 5 requirements validated.
+Milestone M003 (Resumable Execution) completed 2026-03-14 — all 3 slices delivered, 1 requirement validated. 612 tests passing.
 Tech stack: Rust, tokio, clap, git2, genai, backon.
 Three AI backends: Anthropic (Claude), Google (Gemini), OpenAI (Codex/Copilot).
 Module isolation with strict file ownership prevents agent conflicts.
@@ -81,6 +82,7 @@ Durable run reports persisted at `.ath/runs/<run-id>/report.json` with cost esti
 |----|------|--------|-----------|
 | M001 | Migration | ✅ Complete | 2026-03-13 |
 | M002 | Memory Layer | ✅ Complete | 2026-03-14 |
+| M003 | Resumable Execution | ✅ Complete | 2026-03-14 |
 
 ---
-*Last updated: 2026-03-14 — M002 (Memory Layer) complete*
+*Last updated: 2026-03-14 — M003 (Resumable Execution) complete*

@@ -7,7 +7,7 @@
 //! a commit gate serialize file writes and git commits. Fails fast on the
 //! first phase that errors.
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use tokio::sync::Mutex as AsyncMutex;
@@ -16,6 +16,7 @@ use tokio::task::JoinSet;
 use ath_types::phase::PhaseRecord;
 use ath_types::plan::ExecutionPlan;
 
+use crate::checkpoint::{Checkpoint, CheckpointStore, plan_fingerprint};
 use crate::error::PhaseRunnerError;
 use crate::phase_runner::{run_phase_with_progress, AgentRegistry, FileOutput};
 use crate::progress::{emit_progress, ProgressEvent, SharedProgressObserver};
@@ -55,10 +56,16 @@ impl AgentCoordinator {
         &self,
         plan: &ExecutionPlan,
     ) -> Result<Vec<PhaseRecord>, PhaseRunnerError> {
-        self.run_plan_with_progress(plan, None).await
+        self.run_plan_with_progress(plan, None, None).await
     }
 
     /// Execute all phases via parallel group dispatch with optional progress events.
+    ///
+    /// If `checkpoint_path` is provided:
+    /// - Loads existing checkpoint and skips completed groups (emitting PhaseRestored events)
+    /// - Saves checkpoint after each successfully completed group
+    /// - Deletes checkpoint after all groups complete successfully
+    /// - Returns error if checkpoint plan fingerprint doesn't match current plan
     ///
     /// Pre-dispatch isolation validation ensures no file ownership conflicts.
     /// Single-phase groups run directly; multi-phase groups use JoinSet fan-out.
@@ -67,6 +74,7 @@ impl AgentCoordinator {
         &self,
         plan: &ExecutionPlan,
         observer: Option<SharedProgressObserver>,
+        checkpoint_path: Option<&Path>,
     ) -> Result<Vec<PhaseRecord>, PhaseRunnerError> {
         // Pre-dispatch: validate isolation across all parallel groups
         crate::isolation::check_isolation(plan).map_err(|e| {
@@ -76,8 +84,41 @@ impl AgentCoordinator {
         })?;
 
         let commit_gate = Arc::new(AsyncMutex::new(()));
-        let mut results: Vec<PhaseRecord> = Vec::new();
         let total_phases = plan.execution_order.len();
+
+        // Load or create checkpoint if checkpointing is enabled
+        let mut checkpoint = match checkpoint_path {
+            Some(cp_path) => {
+                let existing = CheckpointStore::load(cp_path)?;
+                match existing {
+                    Some(cp) if cp.is_stale(plan) => {
+                        return Err(PhaseRunnerError::TaskExecutionFailed {
+                            task_name: "checkpoint".into(),
+                            agent: "coordinator".into(),
+                            reason: format!(
+                                "Stale checkpoint: plan has changed since the last run. \
+                                 Use --fresh to start a clean run. \
+                                 Checkpoint fingerprint: {}, current: {}",
+                                cp.plan_fingerprint,
+                                plan_fingerprint(plan)
+                            ),
+                        });
+                    }
+                    Some(cp) => Some(cp),
+                    None => Some(Checkpoint::new(
+                        format!("run-{}", chrono::Utc::now().timestamp_nanos_opt().unwrap_or(0)),
+                        plan,
+                    )),
+                }
+            }
+            None => None,
+        };
+
+        // Pre-populate results from checkpoint
+        let mut results: Vec<PhaseRecord> = checkpoint
+            .as_ref()
+            .map(|cp| cp.completed_records.clone())
+            .unwrap_or_default();
 
         // Determine effective parallel groups: if parallel_groups is empty,
         // fall back to treating each execution_order entry as a single-phase group.
@@ -90,6 +131,27 @@ impl AgentCoordinator {
         let mut phases_processed: usize = 0;
 
         for group in &effective_groups {
+            // Skip groups that are fully completed in the checkpoint
+            if let Some(ref cp) = checkpoint {
+                if cp.should_skip_group(group) {
+                    // Emit PhaseRestored for each phase in the group
+                    for &phase_id in group {
+                        if let Some(phase) = plan.phases.iter().find(|p| p.id == phase_id) {
+                            phases_processed += 1;
+                            emit_progress(
+                                observer.as_ref(),
+                                ProgressEvent::PhaseRestored {
+                                    phase_id: phase.id,
+                                    phase_name: phase.name.clone(),
+                                    phase_index: phases_processed,
+                                    total_phases,
+                                },
+                            );
+                        }
+                    }
+                    continue;
+                }
+            }
             if group.len() == 1 {
                 // Single-phase group: run directly without JoinSet overhead
                 let phase_id = group[0];
@@ -123,7 +185,7 @@ impl AgentCoordinator {
 
                 let registry = &*self.registry;
                 let available =
-                    |kind: &ath_types::agent::AgentKind| -> bool { registry.get(kind).is_some() };
+                    |kind: &ath_types::agent::AgentId| -> bool { registry.get(kind).is_some() };
 
                 let record = run_phase_with_progress(
                     phase,
@@ -145,8 +207,14 @@ impl AgentCoordinator {
                     },
                 );
 
-                results.push(record);
+                results.push(record.clone());
                 phases_processed += 1;
+
+                // Save checkpoint after group completes
+                if let (Some(ref mut cp), Some(cp_path)) = (&mut checkpoint, checkpoint_path) {
+                    cp.add_records(vec![record]);
+                    let _ = CheckpointStore::save(cp_path, cp);
+                }
             } else {
                 // Multi-phase group: JoinSet fan-out
                 let mut set: JoinSet<Result<(u32, String, PhaseRecord), PhaseRunnerError>> =
@@ -210,7 +278,7 @@ impl AgentCoordinator {
 
                         let available = {
                             let reg = Arc::clone(&registry);
-                            move |kind: &ath_types::agent::AgentKind| -> bool {
+                            move |kind: &ath_types::agent::AgentId| -> bool {
                                 reg.get(kind).is_some()
                             }
                         };
@@ -275,12 +343,25 @@ impl AgentCoordinator {
                 // Sort by phase_id for deterministic ordering
                 group_results.sort_by_key(|(phase_id, _, _)| *phase_id);
 
+                let mut group_records: Vec<PhaseRecord> = Vec::new();
                 for (_, _, record) in group_results {
-                    results.push(record);
+                    group_records.push(record);
+                }
+                results.extend(group_records.clone());
+
+                // Save checkpoint after group completes
+                if let (Some(ref mut cp), Some(cp_path)) = (&mut checkpoint, checkpoint_path) {
+                    cp.add_records(group_records);
+                    let _ = CheckpointStore::save(cp_path, cp);
                 }
 
                 phases_processed += group.len();
             }
+        }
+
+        // All groups completed successfully — clean up checkpoint
+        if let Some(cp_path) = checkpoint_path {
+            let _ = CheckpointStore::delete(cp_path);
         }
 
         Ok(results)
@@ -312,14 +393,14 @@ fn write_files_to_dir(
 mod tests {
     use super::*;
     use ath_agents::MockBackend;
-    use ath_types::agent::{AgentKind, AgentResponse};
+    use ath_types::agent::{AgentId, AgentResponse};
     use ath_types::plan::{ExecutionPlan, PhaseSpec, TaskSpec};
     use ath_types::project::SkillTag;
     use std::sync::Arc;
 
     // ==================== Helpers ====================
 
-    fn make_task_spec(name: &str, agent: Option<AgentKind>) -> TaskSpec {
+    fn make_task_spec(name: &str, agent: Option<AgentId>) -> TaskSpec {
         TaskSpec {
             name: name.into(),
             description: format!("Implement {name}"),
@@ -331,7 +412,7 @@ mod tests {
         }
     }
 
-    fn make_task_output_json(task_name: &str, agent: &AgentKind, file_path: &str) -> String {
+    fn make_task_output_json(task_name: &str, agent: &AgentId, file_path: &str) -> String {
         let agent_json = serde_json::to_string(agent).unwrap();
         format!(
             r#"{{"task_name":"{}","agent":{},"files_produced":[{{"path":"{}","content":"fn main() {{}}"}}],"explanation":"Done","issues_encountered":[],"input_tokens":100,"output_tokens":50}}"#,
@@ -339,7 +420,7 @@ mod tests {
         )
     }
 
-    fn mock_response(content: &str, agent: &AgentKind) -> AgentResponse {
+    fn mock_response(content: &str, agent: &AgentId) -> AgentResponse {
         AgentResponse {
             request_id: uuid::Uuid::new_v4(),
             agent: agent.clone(),
@@ -388,8 +469,8 @@ mod tests {
 
     #[tokio::test]
     async fn run_plan_single_phase_returns_one_record() {
-        let claude = AgentKind::Claude("opus-4".into());
-        let gemini = AgentKind::Gemini("2.5-pro".into());
+        let claude = AgentId::claude("opus-4");
+        let gemini = AgentId::gemini("2.5-pro");
 
         let tasks = vec![make_task_spec("task-1", Some(claude.clone()))];
         let phase = make_phase(1, "phase-1", tasks);
@@ -420,8 +501,8 @@ mod tests {
 
     #[tokio::test]
     async fn run_plan_two_phases_returns_two_records_in_order() {
-        let claude = AgentKind::Claude("opus-4".into());
-        let gemini = AgentKind::Gemini("2.5-pro".into());
+        let claude = AgentId::claude("opus-4");
+        let gemini = AgentId::gemini("2.5-pro");
 
         let tasks1 = vec![make_task_spec("task-a", Some(claude.clone()))];
         let tasks2 = vec![make_task_spec("task-b", Some(claude.clone()))];
@@ -459,8 +540,8 @@ mod tests {
 
     #[tokio::test]
     async fn run_plan_halts_on_failing_phase() {
-        let claude = AgentKind::Claude("opus-4".into());
-        let gemini = AgentKind::Gemini("2.5-pro".into());
+        let claude = AgentId::claude("opus-4");
+        let gemini = AgentId::gemini("2.5-pro");
 
         let tasks1 = vec![make_task_spec("task-a", Some(claude.clone()))];
         let tasks2 = vec![make_task_spec("task-b", Some(claude.clone()))];
@@ -514,8 +595,8 @@ mod tests {
 
     #[tokio::test]
     async fn run_plan_respects_execution_order() {
-        let claude = AgentKind::Claude("opus-4".into());
-        let gemini = AgentKind::Gemini("2.5-pro".into());
+        let claude = AgentId::claude("opus-4");
+        let gemini = AgentId::gemini("2.5-pro");
 
         // Phases with ids 10, 20 but execution_order is [20, 10]
         let tasks1 = vec![make_task_spec("task-ten", Some(claude.clone()))];
@@ -554,8 +635,8 @@ mod tests {
 
     #[tokio::test]
     async fn run_plan_writes_files_to_output_dir() {
-        let claude = AgentKind::Claude("opus-4".into());
-        let gemini = AgentKind::Gemini("2.5-pro".into());
+        let claude = AgentId::claude("opus-4");
+        let gemini = AgentId::gemini("2.5-pro");
 
         let tasks = vec![make_task_spec("task-1", Some(claude.clone()))];
         let phase = make_phase(1, "phase-1", tasks);
@@ -592,9 +673,9 @@ mod tests {
     // multi-agent (Claude + Gemini), cross-agent review
     #[tokio::test]
     async fn full_pipeline_passes() {
-        let claude = AgentKind::Claude("opus-4".into());
-        let gemini = AgentKind::Gemini("2.5-pro".into());
-        let codex = AgentKind::Codex("o3".into());
+        let claude = AgentId::claude("opus-4");
+        let gemini = AgentId::gemini("2.5-pro");
+        let codex = AgentId::codex("o3");
 
         // Phase 1: 2 Claude tasks, Phase 2: 2 Gemini tasks
         let phase1 = make_phase(
@@ -682,8 +763,8 @@ mod tests {
     // Integration Test 2: Pipeline retry-then-pass
     #[tokio::test]
     async fn pipeline_retry_then_pass() {
-        let claude = AgentKind::Claude("opus-4".into());
-        let gemini = AgentKind::Gemini("2.5-pro".into());
+        let claude = AgentId::claude("opus-4");
+        let gemini = AgentId::gemini("2.5-pro");
 
         let phase = make_phase(
             1,
@@ -732,8 +813,8 @@ mod tests {
     // Integration Test 3: Pipeline halts on max retries
     #[tokio::test]
     async fn pipeline_halts_on_max_retries() {
-        let claude = AgentKind::Claude("opus-4".into());
-        let gemini = AgentKind::Gemini("2.5-pro".into());
+        let claude = AgentId::claude("opus-4");
+        let gemini = AgentId::gemini("2.5-pro");
 
         let phase = make_phase(
             1,
@@ -813,7 +894,7 @@ mod tests {
 
     fn make_task_spec_with_files(
         name: &str,
-        agent: Option<AgentKind>,
+        agent: Option<AgentId>,
         files: Vec<&str>,
     ) -> TaskSpec {
         let mut spec = make_task_spec(name, agent);
@@ -886,8 +967,8 @@ mod tests {
     async fn parallel_phases_overlap() {
         use std::sync::atomic::AtomicU32;
 
-        let claude = AgentKind::Claude("opus-4".into());
-        let gemini = AgentKind::Gemini("2.5-pro".into());
+        let claude = AgentId::claude("opus-4");
+        let gemini = AgentId::gemini("2.5-pro");
 
         let tasks1 = vec![make_task_spec("task-a", Some(claude.clone()))];
         let tasks2 = vec![make_task_spec("task-b", Some(claude.clone()))];
@@ -940,8 +1021,8 @@ mod tests {
     async fn parallel_faster_than_sequential() {
         use std::sync::atomic::AtomicU32;
 
-        let claude = AgentKind::Claude("opus-4".into());
-        let gemini = AgentKind::Gemini("2.5-pro".into());
+        let claude = AgentId::claude("opus-4");
+        let gemini = AgentId::gemini("2.5-pro");
 
         // --- Parallel run ---
         let par_tasks1 = vec![make_task_spec("task-a", Some(claude.clone()))];
@@ -1026,8 +1107,8 @@ mod tests {
 
     #[tokio::test]
     async fn parallel_isolation_blocks_conflict() {
-        let claude = AgentKind::Claude("opus-4".into());
-        let gemini = AgentKind::Gemini("2.5-pro".into());
+        let claude = AgentId::claude("opus-4");
+        let gemini = AgentId::gemini("2.5-pro");
 
         let tasks1 = vec![make_task_spec_with_files(
             "task-a",
@@ -1082,8 +1163,8 @@ mod tests {
 
     #[tokio::test]
     async fn parallel_commits_correct_metadata() {
-        let claude = AgentKind::Claude("opus-4".into());
-        let gemini = AgentKind::Gemini("2.5-pro".into());
+        let claude = AgentId::claude("opus-4");
+        let gemini = AgentId::gemini("2.5-pro");
 
         let tasks1 = vec![make_task_spec_with_files(
             "task-a",
@@ -1147,5 +1228,250 @@ mod tests {
         let file_b = tmp.path().join("src/b.rs");
         assert!(file_a.exists(), "Expected file src/a.rs in output_dir");
         assert!(file_b.exists(), "Expected file src/b.rs in output_dir");
+    }
+
+    // ==================== Checkpoint Integration Tests ====================
+
+    #[tokio::test]
+    async fn checkpoint_resume_skips_completed_phases() {
+        // Setup: 3 sequential phases. Phase 1 and 2 already completed in checkpoint.
+        // Only phase 3 should execute.
+        let claude = AgentId::claude("opus-4");
+        let gemini = AgentId::gemini("2.5-pro");
+
+        let plan = ExecutionPlan {
+            phases: vec![
+                make_phase(
+                    1,
+                    "phase-1",
+                    vec![make_task_spec("task-1", Some(claude.clone()))],
+                ),
+                make_phase(
+                    2,
+                    "phase-2",
+                    vec![make_task_spec("task-2", Some(claude.clone()))],
+                ),
+                make_phase(
+                    3,
+                    "phase-3",
+                    vec![make_task_spec("task-3", Some(claude.clone()))],
+                ),
+            ],
+            execution_order: vec![1, 2, 3],
+            parallel_groups: vec![vec![1], vec![2], vec![3]],
+            critical_path_length: 3,
+        };
+
+        let tmp = tempfile::tempdir().unwrap();
+        let cp_path = tmp.path().join("checkpoint.json");
+
+        // Create a checkpoint with phases 1 and 2 already completed
+        let mut cp = Checkpoint::new("run-resume".into(), &plan);
+        cp.add_records(vec![
+            ath_types::phase::PhaseRecord {
+                id: uuid::Uuid::new_v4(),
+                phase_id: 1,
+                phase_name: "phase-1".into(),
+                started_at: chrono::Utc::now(),
+                completed_at: Some(chrono::Utc::now()),
+                contributions: vec![],
+                review_attempts: vec![],
+            },
+            ath_types::phase::PhaseRecord {
+                id: uuid::Uuid::new_v4(),
+                phase_id: 2,
+                phase_name: "phase-2".into(),
+                started_at: chrono::Utc::now(),
+                completed_at: Some(chrono::Utc::now()),
+                contributions: vec![],
+                review_attempts: vec![],
+            },
+        ]);
+        CheckpointStore::save(&cp_path, &cp).unwrap();
+
+        // Mock backend only needs to handle phase 3 (task + review)
+        let task_mock = Arc::new(MockBackend::new(vec![Ok(mock_response(
+            &make_task_output_json("task-3", &claude, "src/phase3.rs"),
+            &claude,
+        ))]));
+        let reviewer_mock = Arc::new(MockBackend::always_ok(&passing_verdict_json()));
+
+        let mut registry = AgentRegistry::new();
+        registry.register(claude.clone(), task_mock);
+        registry.register(gemini.clone(), reviewer_mock);
+
+        let output_dir = tmp.path().join("output");
+        std::fs::create_dir_all(&output_dir).unwrap();
+        let coordinator = AgentCoordinator::new(registry, output_dir, None);
+
+        // Collect progress events
+        let events = Arc::new(std::sync::Mutex::new(Vec::new()));
+        let events_clone = Arc::clone(&events);
+        let observer: SharedProgressObserver = Arc::new(TestProgressObserver { events: events_clone });
+
+        let records = coordinator
+            .run_plan_with_progress(&plan, Some(observer), Some(&cp_path))
+            .await
+            .expect("resume should succeed");
+
+        // Should have 3 records total (2 restored + 1 fresh)
+        assert_eq!(records.len(), 3, "should have 3 phase records");
+        assert_eq!(records[0].phase_name, "phase-1");
+        assert_eq!(records[1].phase_name, "phase-2");
+        assert_eq!(records[2].phase_name, "phase-3");
+
+        // Check that PhaseRestored events were emitted for phases 1 and 2
+        let captured = events.lock().unwrap();
+        let restored: Vec<_> = captured
+            .iter()
+            .filter(|e| matches!(e, ProgressEvent::PhaseRestored { .. }))
+            .collect();
+        assert_eq!(restored.len(), 2, "should have 2 PhaseRestored events");
+
+        // Checkpoint should be cleaned up after success
+        assert!(
+            !cp_path.exists(),
+            "checkpoint should be deleted after successful completion"
+        );
+    }
+
+    #[tokio::test]
+    async fn checkpoint_stale_plan_rejected() {
+        let plan_a = ExecutionPlan {
+            phases: vec![make_phase(1, "original-phase", vec![])],
+            execution_order: vec![1],
+            parallel_groups: vec![vec![1]],
+            critical_path_length: 1,
+        };
+
+        let plan_b = ExecutionPlan {
+            phases: vec![make_phase(1, "different-phase", vec![])],
+            execution_order: vec![1],
+            parallel_groups: vec![vec![1]],
+            critical_path_length: 1,
+        };
+
+        let tmp = tempfile::tempdir().unwrap();
+        let cp_path = tmp.path().join("checkpoint.json");
+
+        // Save checkpoint with plan_a
+        let cp = Checkpoint::new("run-stale".into(), &plan_a);
+        CheckpointStore::save(&cp_path, &cp).unwrap();
+
+        let registry = AgentRegistry::new();
+        let coordinator = AgentCoordinator::new(registry, tmp.path().to_path_buf(), None);
+
+        // Try to resume with plan_b — should fail
+        let result = coordinator
+            .run_plan_with_progress(&plan_b, None, Some(&cp_path))
+            .await;
+
+        assert!(result.is_err());
+        let err = result.unwrap_err().to_string();
+        assert!(
+            err.contains("Stale checkpoint"),
+            "expected stale checkpoint error, got: {err}"
+        );
+    }
+
+    #[tokio::test]
+    async fn checkpoint_saved_after_each_group() {
+        // Run with 2 phases. Phase 1 succeeds, phase 2 fails.
+        // Checkpoint should have phase 1's record saved.
+        let claude = AgentId::claude("opus-4");
+        let gemini = AgentId::gemini("2.5-pro");
+
+        let plan = ExecutionPlan {
+            phases: vec![
+                make_phase(
+                    1,
+                    "phase-1",
+                    vec![make_task_spec("task-1", Some(claude.clone()))],
+                ),
+                make_phase(
+                    2,
+                    "phase-2",
+                    vec![make_task_spec("task-2", Some(claude.clone()))],
+                ),
+            ],
+            execution_order: vec![1, 2],
+            parallel_groups: vec![vec![1], vec![2]],
+            critical_path_length: 2,
+        };
+
+        let tmp = tempfile::tempdir().unwrap();
+        let cp_path = tmp.path().join("checkpoint.json");
+        let output_dir = tmp.path().join("output");
+        std::fs::create_dir_all(&output_dir).unwrap();
+
+        // Phase 1: task succeeds + review passes
+        // Phase 2: task succeeds + review fails 3 times (MaxRetriesExceeded)
+        let task_mock = Arc::new(MockBackend::new(vec![
+            Ok(mock_response(
+                &make_task_output_json("task-1", &claude, "src/a.rs"),
+                &claude,
+            )),
+            Ok(mock_response(
+                &make_task_output_json("task-2", &claude, "src/b.rs"),
+                &claude,
+            )),
+            Ok(mock_response(
+                &make_task_output_json("task-2", &claude, "src/b.rs"),
+                &claude,
+            )),
+            Ok(mock_response(
+                &make_task_output_json("task-2", &claude, "src/b.rs"),
+                &claude,
+            )),
+        ]));
+
+        // Review: pass for phase 1, fail 3 times for phase 2
+        let reviewer_mock = Arc::new(MockBackend::new(vec![
+            Ok(mock_response(&passing_verdict_json(), &gemini)),
+            Ok(mock_response(
+                &failing_verdict_json("needs work"),
+                &gemini,
+            )),
+            Ok(mock_response(
+                &failing_verdict_json("still needs work"),
+                &gemini,
+            )),
+            Ok(mock_response(
+                &failing_verdict_json("final rejection"),
+                &gemini,
+            )),
+        ]));
+
+        let mut registry = AgentRegistry::new();
+        registry.register(claude.clone(), task_mock);
+        registry.register(gemini.clone(), reviewer_mock);
+
+        let coordinator = AgentCoordinator::new(registry, output_dir, None);
+
+        let result = coordinator
+            .run_plan_with_progress(&plan, None, Some(&cp_path))
+            .await;
+
+        // Phase 2 should fail
+        assert!(result.is_err());
+
+        // But checkpoint should exist with phase 1's record saved
+        let saved_cp = CheckpointStore::load(&cp_path).unwrap();
+        assert!(saved_cp.is_some(), "checkpoint should exist after partial failure");
+        let saved_cp = saved_cp.unwrap();
+        assert_eq!(saved_cp.completed_count(), 1);
+        assert!(saved_cp.completed_phase_ids.contains(&1));
+        assert!(!saved_cp.completed_phase_ids.contains(&2));
+    }
+
+    // Helper: simple progress observer for test assertions
+    struct TestProgressObserver {
+        events: Arc<std::sync::Mutex<Vec<ProgressEvent>>>,
+    }
+
+    impl crate::progress::ProgressObserver for TestProgressObserver {
+        fn on_event(&self, event: ProgressEvent) {
+            self.events.lock().unwrap().push(event);
+        }
     }
 }

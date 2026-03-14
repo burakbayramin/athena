@@ -6,7 +6,7 @@
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
-use crate::agent::AgentKind;
+use crate::agent::AgentId;
 use crate::phase::PhaseRecord;
 use crate::plan::ExecutionPlan;
 
@@ -34,7 +34,7 @@ impl Default for ReportTotals {
 /// Usage totals for one agent inside a saved phase summary.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct AgentTotals {
-    pub agent: AgentKind,
+    pub agent: AgentId,
     pub input_tokens: u64,
     pub output_tokens: u64,
     pub estimated_cost_usd: Option<f64>,
@@ -77,7 +77,7 @@ mod tests {
     use super::*;
     use uuid::Uuid;
 
-    use crate::agent::AgentKind;
+    use crate::agent::AgentId;
     use crate::phase::{AgentContribution, TokenUsage};
 
     #[test]
@@ -98,7 +98,7 @@ mod tests {
                 started_at: Utc::now(),
                 completed_at: Some(Utc::now()),
                 contributions: vec![AgentContribution {
-                    agent: AgentKind::Claude("opus-4".into()),
+                    agent: AgentId::claude("opus-4"),
                     tokens: TokenUsage {
                         input_tokens: 10,
                         output_tokens: 5,
@@ -118,7 +118,7 @@ mod tests {
                     estimated_cost_usd: Some(0.42),
                 },
                 agent_totals: vec![AgentTotals {
-                    agent: AgentKind::Claude("opus-4".into()),
+                    agent: AgentId::claude("opus-4"),
                     input_tokens: 10,
                     output_tokens: 5,
                     estimated_cost_usd: Some(0.42),

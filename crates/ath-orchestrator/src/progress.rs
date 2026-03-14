@@ -6,7 +6,7 @@
 
 use std::sync::Arc;
 
-use ath_types::agent::AgentKind;
+use ath_types::agent::AgentId;
 
 /// Structured execution events suitable for terminal progress rendering.
 #[derive(Debug, Clone, PartialEq)]
@@ -24,7 +24,7 @@ pub enum ProgressEvent {
         task_name: String,
         task_index: usize,
         total_tasks: usize,
-        agent: AgentKind,
+        agent: AgentId,
     },
     TaskCompleted {
         phase_id: u32,
@@ -32,34 +32,41 @@ pub enum ProgressEvent {
         task_name: String,
         task_index: usize,
         total_tasks: usize,
-        agent: AgentKind,
+        agent: AgentId,
     },
     ReviewStarted {
         phase_id: u32,
         phase_name: String,
-        reviewer: AgentKind,
+        reviewer: AgentId,
         attempt_number: u32,
     },
     ReviewPassed {
         phase_id: u32,
         phase_name: String,
-        reviewer: AgentKind,
+        reviewer: AgentId,
         attempt_number: u32,
     },
     ReviewFailed {
         phase_id: u32,
         phase_name: String,
-        reviewer: AgentKind,
+        reviewer: AgentId,
         attempt_number: u32,
         reason_summary: String,
     },
     RetryStarted {
         phase_id: u32,
         phase_name: String,
-        reviewer: AgentKind,
+        reviewer: AgentId,
         attempt_number: u32,
     },
     PhaseCompleted {
+        phase_id: u32,
+        phase_name: String,
+        phase_index: usize,
+        total_phases: usize,
+    },
+    /// A phase was restored from checkpoint (skipped on resume).
+    PhaseRestored {
         phase_id: u32,
         phase_name: String,
         phase_index: usize,
@@ -84,7 +91,7 @@ pub struct Transcript {
     pub phase_name: String,
     pub label: String,
     pub attempt_number: u32,
-    pub agent: AgentKind,
+    pub agent: AgentId,
     pub prompt: String,
     pub response: String,
     pub retry_feedback: Option<String>,
@@ -144,7 +151,7 @@ mod tests {
         }
     }
 
-    fn make_task_spec(name: &str, agent: Option<AgentKind>) -> TaskSpec {
+    fn make_task_spec(name: &str, agent: Option<AgentId>) -> TaskSpec {
         TaskSpec {
             name: name.into(),
             description: format!("Implement {name}"),
@@ -178,7 +185,7 @@ mod tests {
         }
     }
 
-    fn make_task_output_json(task_name: &str, agent: &AgentKind, file_path: &str) -> String {
+    fn make_task_output_json(task_name: &str, agent: &AgentId, file_path: &str) -> String {
         let agent_json = serde_json::to_string(agent).unwrap();
         format!(
             r#"{{"task_name":"{}","agent":{},"files_produced":[{{"path":"{}","content":"fn main() {{}}"}}],"explanation":"Done","issues_encountered":[],"input_tokens":100,"output_tokens":50}}"#,
@@ -186,7 +193,7 @@ mod tests {
         )
     }
 
-    fn mock_response(content: &str, agent: &AgentKind) -> AgentResponse {
+    fn mock_response(content: &str, agent: &AgentId) -> AgentResponse {
         AgentResponse {
             request_id: uuid::Uuid::new_v4(),
             agent: agent.clone(),
@@ -210,8 +217,8 @@ mod tests {
 
     #[tokio::test]
     async fn phase_execution_emits_phase_started_before_any_task_event() {
-        let claude = AgentKind::Claude("opus-4".into());
-        let gemini = AgentKind::Gemini("2.5-pro".into());
+        let claude = AgentId::claude("opus-4");
+        let gemini = AgentId::gemini("2.5-pro");
 
         let phase = make_phase(
             1,
@@ -237,7 +244,7 @@ mod tests {
         let coordinator = AgentCoordinator::new(registry, tmp.path().to_path_buf(), None);
 
         coordinator
-            .run_plan_with_progress(&plan, Some(progress))
+            .run_plan_with_progress(&plan, Some(progress), None)
             .await
             .expect("plan executes");
 
@@ -256,8 +263,8 @@ mod tests {
 
     #[tokio::test]
     async fn each_task_emits_started_then_completed_with_assigned_agent() {
-        let claude = AgentKind::Claude("opus-4".into());
-        let gemini = AgentKind::Gemini("2.5-pro".into());
+        let claude = AgentId::claude("opus-4");
+        let gemini = AgentId::gemini("2.5-pro");
 
         let phase = make_phase(
             1,
@@ -346,8 +353,8 @@ mod tests {
 
     #[tokio::test]
     async fn review_dispatch_emits_review_started_before_reviewer_result() {
-        let claude = AgentKind::Claude("opus-4".into());
-        let gemini = AgentKind::Gemini("2.5-pro".into());
+        let claude = AgentId::claude("opus-4");
+        let gemini = AgentId::gemini("2.5-pro");
 
         let phase = make_phase(
             1,
@@ -395,8 +402,8 @@ mod tests {
 
     #[tokio::test]
     async fn review_failure_emits_retry_and_review_failed_events() {
-        let claude = AgentKind::Claude("opus-4".into());
-        let gemini = AgentKind::Gemini("2.5-pro".into());
+        let claude = AgentId::claude("opus-4");
+        let gemini = AgentId::gemini("2.5-pro");
 
         let phase = make_phase(
             1,
@@ -460,8 +467,8 @@ mod tests {
 
     #[tokio::test]
     async fn successful_completion_emits_phase_completed() {
-        let claude = AgentKind::Claude("opus-4".into());
-        let gemini = AgentKind::Gemini("2.5-pro".into());
+        let claude = AgentId::claude("opus-4");
+        let gemini = AgentId::gemini("2.5-pro");
 
         let phase = make_phase(
             1,
@@ -487,7 +494,7 @@ mod tests {
         let coordinator = AgentCoordinator::new(registry, tmp.path().to_path_buf(), None);
 
         coordinator
-            .run_plan_with_progress(&plan, Some(progress))
+            .run_plan_with_progress(&plan, Some(progress), None)
             .await
             .expect("plan executes");
 
@@ -536,7 +543,7 @@ mod verbose {
         }
     }
 
-    fn make_task_spec(name: &str, agent: Option<AgentKind>) -> TaskSpec {
+    fn make_task_spec(name: &str, agent: Option<AgentId>) -> TaskSpec {
         TaskSpec {
             name: name.into(),
             description: format!("Implement {name}"),
@@ -560,7 +567,7 @@ mod verbose {
         }
     }
 
-    fn make_task_output_json(task_name: &str, agent: &AgentKind, file_path: &str) -> String {
+    fn make_task_output_json(task_name: &str, agent: &AgentId, file_path: &str) -> String {
         let agent_json = serde_json::to_string(agent).unwrap();
         format!(
             r#"{{"task_name":"{}","agent":{},"files_produced":[{{"path":"{}","content":"fn main() {{}}"}}],"explanation":"Done","issues_encountered":[],"input_tokens":100,"output_tokens":50}}"#,
@@ -568,7 +575,7 @@ mod verbose {
         )
     }
 
-    fn mock_response(content: &str, agent: &AgentKind) -> AgentResponse {
+    fn mock_response(content: &str, agent: &AgentId) -> AgentResponse {
         AgentResponse {
             request_id: uuid::Uuid::new_v4(),
             agent: agent.clone(),
@@ -595,8 +602,8 @@ mod verbose {
 
         #[tokio::test]
         async fn task_execution_emits_transcript_payloads_when_enabled() {
-            let claude = AgentKind::Claude("opus-4".into());
-            let gemini = AgentKind::Gemini("2.5-pro".into());
+            let claude = AgentId::claude("opus-4");
+            let gemini = AgentId::gemini("2.5-pro");
             let phase = make_phase(
                 1,
                 "phase-1",
@@ -638,8 +645,8 @@ mod verbose {
 
         #[tokio::test]
         async fn review_dispatch_emits_reviewer_prompt_and_verdict_transcript() {
-            let claude = AgentKind::Claude("opus-4".into());
-            let gemini = AgentKind::Gemini("2.5-pro".into());
+            let claude = AgentId::claude("opus-4");
+            let gemini = AgentId::gemini("2.5-pro");
             let phase = make_phase(
                 1,
                 "phase-1",
@@ -681,8 +688,8 @@ mod verbose {
 
         #[tokio::test]
         async fn retry_feedback_is_exposed_as_transcript_context_for_next_attempt() {
-            let claude = AgentKind::Claude("opus-4".into());
-            let gemini = AgentKind::Gemini("2.5-pro".into());
+            let claude = AgentId::claude("opus-4");
+            let gemini = AgentId::gemini("2.5-pro");
             let phase = make_phase(
                 1,
                 "phase-1",
@@ -732,8 +739,8 @@ mod verbose {
 
         #[tokio::test]
         async fn normal_mode_runs_without_transcript_capture_enabled() {
-            let claude = AgentKind::Claude("opus-4".into());
-            let gemini = AgentKind::Gemini("2.5-pro".into());
+            let claude = AgentId::claude("opus-4");
+            let gemini = AgentId::gemini("2.5-pro");
             let phase = make_phase(
                 1,
                 "phase-1",

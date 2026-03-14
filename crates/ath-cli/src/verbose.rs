@@ -1,7 +1,7 @@
 use std::sync::{Arc, Mutex};
 
 use ath_orchestrator::progress::{ProgressEvent, ProgressObserver, Transcript, TranscriptKind};
-use ath_types::agent::AgentKind;
+use ath_types::agent::AgentId;
 
 use crate::progress::TerminalProgressReporter;
 
@@ -167,7 +167,7 @@ fn is_secret_char(ch: char) -> bool {
     ch.is_ascii_alphanumeric() || matches!(ch, '-' | '_' | '/')
 }
 
-fn format_agent(agent: &AgentKind) -> String {
+fn format_agent(agent: &AgentId) -> String {
     format!("{}/{}", agent.provider_name(), agent.model())
 }
 
@@ -183,7 +183,7 @@ mod tests {
             phase_name: "foundation".into(),
             label: "task-1".into(),
             attempt_number: 1,
-            agent: AgentKind::Claude("opus-4".into()),
+            agent: AgentId::claude("opus-4"),
             prompt: "Use OPENAI_API_KEY=sk-test-secret".into(),
             response: "Created output with AIzaSecretToken".into(),
             retry_feedback: Some("ANTHROPIC_API_KEY=secret-value".into()),
@@ -209,7 +209,7 @@ mod tests {
             task_name: "task-1".into(),
             task_index: 1,
             total_tasks: 1,
-            agent: AgentKind::Claude("opus-4".into()),
+            agent: AgentId::claude("opus-4"),
         });
 
         let snapshot = reporter.snapshot();

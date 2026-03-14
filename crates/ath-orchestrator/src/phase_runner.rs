@@ -9,11 +9,10 @@
 
 use std::collections::HashMap;
 use std::marker::PhantomData;
-use std::mem;
 use std::sync::Arc;
 
 use ath_agents::AgentBackend;
-use ath_types::agent::{AgentKind, AgentRequest, AgentResponse};
+use ath_types::agent::{AgentId, AgentRequest, AgentResponse};
 use ath_types::plan::PhaseSpec;
 use ath_types::review::ReviewVerdict;
 use serde::{Deserialize, Serialize};
@@ -371,7 +370,7 @@ pub struct TaskOutput {
     /// Name of the task that was executed.
     pub task_name: String,
     /// The agent that executed the task.
-    pub agent: AgentKind,
+    pub agent: AgentId,
     /// Files produced by the task.
     pub files_produced: Vec<FileOutput>,
     /// Agent's explanation of what was done.
@@ -435,10 +434,10 @@ pub fn task_output_schema() -> serde_json::Value {
 
 /// Registry mapping agent kinds to their backend implementations.
 ///
-/// Uses `std::mem::Discriminant<AgentKind>` as the key so that
+/// Uses `std::mem::Discriminant<AgentId>` as the key so that
 /// `Claude("opus-4")` and `Claude("sonnet-4")` share the same slot.
 pub struct AgentRegistry {
-    backends: HashMap<mem::Discriminant<AgentKind>, Arc<dyn AgentBackend>>,
+    backends: HashMap<String, Arc<dyn AgentBackend>>,
 }
 
 impl Default for AgentRegistry {
@@ -455,14 +454,14 @@ impl AgentRegistry {
         }
     }
 
-    /// Register a backend for the given agent kind.
-    pub fn register(&mut self, kind: AgentKind, backend: Arc<dyn AgentBackend>) {
-        self.backends.insert(mem::discriminant(&kind), backend);
+    /// Register a backend for the given agent's provider.
+    pub fn register(&mut self, kind: AgentId, backend: Arc<dyn AgentBackend>) {
+        self.backends.insert(kind.provider().to_string(), backend);
     }
 
-    /// Look up a backend by agent kind.
-    pub fn get(&self, kind: &AgentKind) -> Option<Arc<dyn AgentBackend>> {
-        self.backends.get(&mem::discriminant(kind)).cloned()
+    /// Look up a backend by agent's provider.
+    pub fn get(&self, kind: &AgentId) -> Option<Arc<dyn AgentBackend>> {
+        self.backends.get(kind.provider()).cloned()
     }
 }
 
@@ -620,7 +619,7 @@ pub async fn execute_phase_tasks_with_progress(
 pub async fn run_phase(
     phase: &PhaseSpec,
     registry: &AgentRegistry,
-    available: impl Fn(&AgentKind) -> bool,
+    available: impl Fn(&AgentId) -> bool,
     write_files: impl Fn(&[FileOutput]) -> Result<(), PhaseRunnerError>,
     git: Option<&ath_git::async_ops::AsyncGitLayer>,
 ) -> Result<ath_types::phase::PhaseRecord, PhaseRunnerError> {
@@ -632,7 +631,7 @@ pub async fn run_phase(
 pub async fn run_phase_with_progress(
     phase: &PhaseSpec,
     registry: &AgentRegistry,
-    available: impl Fn(&AgentKind) -> bool,
+    available: impl Fn(&AgentId) -> bool,
     write_files: impl Fn(&[FileOutput]) -> Result<(), PhaseRunnerError>,
     git: Option<&ath_git::async_ops::AsyncGitLayer>,
     observer: Option<SharedProgressObserver>,
@@ -642,7 +641,7 @@ pub async fn run_phase_with_progress(
     let started_at = chrono::Utc::now();
 
     // Collect task agents for reviewer selection
-    let task_agents: Vec<AgentKind> = phase
+    let task_agents: Vec<AgentId> = phase
         .tasks
         .iter()
         .filter_map(|t| t.assigned_agent.clone())
@@ -896,7 +895,7 @@ pub async fn run_phase_with_progress(
 
 fn merge_contribution(
     contributions: &mut Vec<ath_types::phase::AgentContribution>,
-    agent: &AgentKind,
+    agent: &AgentId,
     input_tokens: u64,
     output_tokens: u64,
     file_paths: impl IntoIterator<Item = String>,
@@ -940,7 +939,7 @@ fn merge_contribution(
 mod tests {
     use super::*;
     use ath_agents::MockBackend;
-    use ath_types::agent::{AgentKind, AgentResponse};
+    use ath_types::agent::{AgentId, AgentResponse};
     use ath_types::plan::TaskSpec;
     use ath_types::project::SkillTag;
     use ath_types::review::{ReviewVerdict, Severity};
@@ -949,7 +948,7 @@ mod tests {
     fn make_verdict(passed: bool, reason: &str) -> ReviewVerdict {
         ReviewVerdict {
             passed,
-            reviewer: AgentKind::Gemini("2.5-pro".into()),
+            reviewer: AgentId::gemini("2.5-pro"),
             severity: if passed {
                 Severity::Info
             } else {
@@ -963,7 +962,7 @@ mod tests {
     fn make_task_output(name: &str) -> TaskOutput {
         TaskOutput {
             task_name: name.into(),
-            agent: AgentKind::Claude("opus-4".into()),
+            agent: AgentId::claude("opus-4"),
             files_produced: vec![FileOutput {
                 path: "src/lib.rs".into(),
                 content: "fn main() {}".into(),
@@ -1109,7 +1108,7 @@ mod tests {
 
         let output: TaskOutput = serde_json::from_value(json).expect("deserialize TaskOutput");
         assert_eq!(output.task_name, "implement-auth");
-        assert_eq!(output.agent, AgentKind::Claude("opus-4".into()));
+        assert_eq!(output.agent, AgentId::claude("opus-4"));
         assert_eq!(output.files_produced.len(), 1);
         assert_eq!(output.files_produced[0].path, "src/auth.rs");
         assert_eq!(output.issues_encountered, vec!["Had to handle edge case"]);
@@ -1119,7 +1118,7 @@ mod tests {
 
     // ==================== Helper: make_task_spec ====================
 
-    fn make_task_spec(name: &str, agent: Option<AgentKind>) -> TaskSpec {
+    fn make_task_spec(name: &str, agent: Option<AgentId>) -> TaskSpec {
         TaskSpec {
             name: name.into(),
             description: format!("Implement {name}"),
@@ -1131,7 +1130,7 @@ mod tests {
         }
     }
 
-    fn make_task_output_json(task_name: &str, agent: &AgentKind) -> String {
+    fn make_task_output_json(task_name: &str, agent: &AgentId) -> String {
         let agent_json = serde_json::to_string(agent).unwrap();
         format!(
             r#"{{"task_name":"{}","agent":{},"files_produced":[{{"path":"src/lib.rs","content":"fn main() {{}}"}}],"explanation":"Done","issues_encountered":[],"input_tokens":100,"output_tokens":50}}"#,
@@ -1139,7 +1138,7 @@ mod tests {
         )
     }
 
-    fn mock_response_for_task(task_name: &str, agent: &AgentKind) -> AgentResponse {
+    fn mock_response_for_task(task_name: &str, agent: &AgentId) -> AgentResponse {
         AgentResponse {
             request_id: uuid::Uuid::new_v4(),
             agent: agent.clone(),
@@ -1151,7 +1150,7 @@ mod tests {
     }
 
     fn make_review_response(
-        reviewer: &AgentKind,
+        reviewer: &AgentId,
         passed: bool,
         reason: &str,
         input_tokens: u64,
@@ -1175,8 +1174,8 @@ mod tests {
 
     #[tokio::test]
     async fn execute_dispatches_each_task_to_assigned_agent() {
-        let claude = AgentKind::Claude("opus-4".into());
-        let gemini = AgentKind::Gemini("2.5-pro".into());
+        let claude = AgentId::claude("opus-4");
+        let gemini = AgentId::gemini("2.5-pro");
 
         let tasks = vec![
             make_task_spec("task-a", Some(claude.clone())),
@@ -1215,7 +1214,7 @@ mod tests {
     #[tokio::test]
     async fn execute_builds_request_with_task_output_schema() {
         // This test verifies that json_schema is set; checked via successful parse
-        let claude = AgentKind::Claude("opus-4".into());
+        let claude = AgentId::claude("opus-4");
         let tasks = vec![make_task_spec("task-1", Some(claude.clone()))];
 
         let mock = Arc::new(MockBackend::new(vec![Ok(mock_response_for_task(
@@ -1242,7 +1241,7 @@ mod tests {
 
     #[tokio::test]
     async fn execute_parses_response_content_as_task_output() {
-        let claude = AgentKind::Claude("opus-4".into());
+        let claude = AgentId::claude("opus-4");
         let tasks = vec![make_task_spec("parse-test", Some(claude.clone()))];
 
         let mock = Arc::new(MockBackend::new(vec![Ok(mock_response_for_task(
@@ -1271,7 +1270,7 @@ mod tests {
 
     #[tokio::test]
     async fn execute_collects_outputs_in_order() {
-        let claude = AgentKind::Claude("opus-4".into());
+        let claude = AgentId::claude("opus-4");
         let tasks = vec![
             make_task_spec("first", Some(claude.clone())),
             make_task_spec("second", Some(claude.clone())),
@@ -1306,7 +1305,7 @@ mod tests {
 
     #[tokio::test]
     async fn execute_returns_error_on_agent_send_failure() {
-        let claude = AgentKind::Claude("opus-4".into());
+        let claude = AgentId::claude("opus-4");
         let tasks = vec![make_task_spec("failing", Some(claude.clone()))];
 
         let mock = Arc::new(MockBackend::failing(|| ath_agents::AgentError::Timeout {
@@ -1338,7 +1337,7 @@ mod tests {
 
     #[tokio::test]
     async fn execute_returns_error_on_unparseable_json() {
-        let claude = AgentKind::Claude("opus-4".into());
+        let claude = AgentId::claude("opus-4");
         let tasks = vec![make_task_spec("bad-json", Some(claude.clone()))];
 
         let mock = Arc::new(MockBackend::always_ok("not valid json"));
@@ -1367,7 +1366,7 @@ mod tests {
 
     #[tokio::test]
     async fn execute_uses_retry_prompt_when_feedback_provided() {
-        let claude = AgentKind::Claude("opus-4".into());
+        let claude = AgentId::claude("opus-4");
         let tasks = vec![make_task_spec("retry-task", Some(claude.clone()))];
 
         let mock = Arc::new(MockBackend::new(vec![Ok(mock_response_for_task(
@@ -1390,7 +1389,7 @@ mod tests {
 
         let feedback = ReviewVerdict {
             passed: false,
-            reviewer: AgentKind::Gemini("2.5-pro".into()),
+            reviewer: AgentId::gemini("2.5-pro"),
             severity: Severity::Critical,
             reason: "Fix the bug".into(),
             suggestions: vec![],
@@ -1428,8 +1427,8 @@ mod tests {
 
     #[tokio::test]
     async fn run_phase_happy_path_completes_in_one_attempt() {
-        let claude = AgentKind::Claude("opus-4".into());
-        let gemini = AgentKind::Gemini("2.5-pro".into());
+        let claude = AgentId::claude("opus-4");
+        let gemini = AgentId::gemini("2.5-pro");
 
         let tasks = vec![make_task_spec("task-1", Some(claude.clone()))];
         let phase = make_test_phase(tasks);
@@ -1466,8 +1465,8 @@ mod tests {
 
     #[tokio::test]
     async fn run_phase_review_fails_once_then_passes() {
-        let claude = AgentKind::Claude("opus-4".into());
-        let gemini = AgentKind::Gemini("2.5-pro".into());
+        let claude = AgentId::claude("opus-4");
+        let gemini = AgentId::gemini("2.5-pro");
 
         let tasks = vec![make_task_spec("task-1", Some(claude.clone()))];
         let phase = make_test_phase(tasks);
@@ -1513,8 +1512,8 @@ mod tests {
 
     #[tokio::test]
     async fn run_phase_three_failures_returns_max_retries_exceeded() {
-        let claude = AgentKind::Claude("opus-4".into());
-        let gemini = AgentKind::Gemini("2.5-pro".into());
+        let claude = AgentId::claude("opus-4");
+        let gemini = AgentId::gemini("2.5-pro");
 
         let tasks = vec![make_task_spec("task-1", Some(claude.clone()))];
         let phase = make_test_phase(tasks);
@@ -1567,8 +1566,8 @@ mod tests {
 
     #[tokio::test]
     async fn run_phase_same_reviewer_across_all_attempts() {
-        let claude = AgentKind::Claude("opus-4".into());
-        let gemini = AgentKind::Gemini("2.5-pro".into());
+        let claude = AgentId::claude("opus-4");
+        let gemini = AgentId::gemini("2.5-pro");
 
         let tasks = vec![make_task_spec("task-1", Some(claude.clone()))];
         let phase = make_test_phase(tasks);
@@ -1608,7 +1607,7 @@ mod tests {
             .unwrap();
         // All review attempts should use the same reviewer kind
         for attempt in &record.review_attempts {
-            assert!(matches!(attempt.verdict.reviewer, AgentKind::Gemini(_)));
+            assert!(attempt.verdict.reviewer.is_gemini());
         }
     }
 
@@ -1617,8 +1616,8 @@ mod tests {
         // Indirectly tested: if feedback is injected, the task agent gets called
         // with a retry prompt. We verify the execution completes (which means
         // feedback was used since only the latest is injected, not accumulated).
-        let claude = AgentKind::Claude("opus-4".into());
-        let gemini = AgentKind::Gemini("2.5-pro".into());
+        let claude = AgentId::claude("opus-4");
+        let gemini = AgentId::gemini("2.5-pro");
 
         let tasks = vec![make_task_spec("task-1", Some(claude.clone()))];
         let phase = make_test_phase(tasks);
@@ -1660,8 +1659,8 @@ mod tests {
 
     #[tokio::test]
     async fn run_phase_files_written_only_after_review_passes() {
-        let claude = AgentKind::Claude("opus-4".into());
-        let gemini = AgentKind::Gemini("2.5-pro".into());
+        let claude = AgentId::claude("opus-4");
+        let gemini = AgentId::gemini("2.5-pro");
 
         let tasks = vec![make_task_spec("task-1", Some(claude.clone()))];
         let phase = make_test_phase(tasks);
@@ -1713,8 +1712,8 @@ mod tests {
 
     #[tokio::test]
     async fn run_phase_record_tracks_token_usage() {
-        let claude = AgentKind::Claude("opus-4".into());
-        let gemini = AgentKind::Gemini("2.5-pro".into());
+        let claude = AgentId::claude("opus-4");
+        let gemini = AgentId::gemini("2.5-pro");
 
         let tasks = vec![make_task_spec("task-1", Some(claude.clone()))];
         let phase = make_test_phase(tasks);
@@ -1756,8 +1755,8 @@ mod tests {
 
     #[tokio::test]
     async fn run_phase_record_accumulates_reviewer_tokens_across_failed_and_passing_reviews() {
-        let claude = AgentKind::Claude("opus-4".into());
-        let gemini = AgentKind::Gemini("2.5-pro".into());
+        let claude = AgentId::claude("opus-4");
+        let gemini = AgentId::gemini("2.5-pro");
 
         let tasks = vec![make_task_spec("task-1", Some(claude.clone()))];
         let phase = make_test_phase(tasks);
@@ -1809,9 +1808,9 @@ mod tests {
 
     #[tokio::test]
     async fn run_phase_record_keeps_models_distinct_within_same_provider() {
-        let claude_opus = AgentKind::Claude("opus-4".into());
-        let claude_sonnet = AgentKind::Claude("sonnet-4".into());
-        let gemini = AgentKind::Gemini("2.5-pro".into());
+        let claude_opus = AgentId::claude("opus-4");
+        let claude_sonnet = AgentId::claude("sonnet-4");
+        let gemini = AgentId::gemini("2.5-pro");
 
         let tasks = vec![
             make_task_spec("task-opus", Some(claude_opus.clone())),
@@ -1848,8 +1847,8 @@ mod tests {
 
     #[tokio::test]
     async fn run_phase_record_deduplicates_files_while_accumulating_retry_tokens() {
-        let claude = AgentKind::Claude("opus-4".into());
-        let gemini = AgentKind::Gemini("2.5-pro".into());
+        let claude = AgentId::claude("opus-4");
+        let gemini = AgentId::gemini("2.5-pro");
 
         let tasks = vec![make_task_spec("task-1", Some(claude.clone()))];
         let phase = make_test_phase(tasks);

@@ -549,7 +549,7 @@ fn conflict_detection_blocks_commit() {
 
 #[test]
 fn full_phase_commit_workflow() {
-    use ath_types::agent::AgentKind;
+    use ath_types::agent::AgentId;
     use ath_types::review::{ReviewVerdict, Severity};
 
     let (dir, layer) = create_temp_repo();
@@ -560,10 +560,10 @@ fn full_phase_commit_workflow() {
     write_file(dir.path(), "tests/test.rs", "#[test] fn it_works() {}");
 
     // Build metadata using from_phase_data
-    let agent = AgentKind::Claude("opus-4".to_string());
+    let agent = AgentId::claude("opus-4".to_string());
     let verdict = ReviewVerdict {
         passed: true,
-        reviewer: AgentKind::Gemini("2.5-pro".to_string()),
+        reviewer: AgentId::gemini("2.5-pro".to_string()),
         severity: Severity::Info,
         reason: "All checks passed".to_string(),
         suggestions: vec![],

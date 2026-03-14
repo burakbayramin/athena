@@ -9,7 +9,7 @@ use std::collections::VecDeque;
 use std::sync::{Arc, Mutex};
 
 use async_trait::async_trait;
-use ath_types::agent::{AgentKind, AgentRequest, AgentResponse};
+use ath_types::agent::{AgentId, AgentRequest, AgentResponse};
 use chrono::Utc;
 
 use crate::backend::AgentBackend;
@@ -96,7 +96,7 @@ impl AgentBackend for MockBackend {
             }
             MockMode::AlwaysOk { content } => Ok(AgentResponse {
                 request_id: request.id,
-                agent: AgentKind::Claude("mock".into()),
+                agent: AgentId::claude("mock"),
                 content: content.clone(),
                 input_tokens: 0,
                 output_tokens: 0,
@@ -124,7 +124,7 @@ mod tests {
     fn make_request() -> AgentRequest {
         AgentRequest {
             id: Uuid::new_v4(),
-            agent: AgentKind::Claude("opus-4".into()),
+            agent: AgentId::claude("opus-4"),
             prompt: "test prompt".into(),
             context: None,
             json_schema: None,
@@ -135,7 +135,7 @@ mod tests {
     fn make_response(request_id: Uuid, content: &str) -> AgentResponse {
         AgentResponse {
             request_id,
-            agent: AgentKind::Claude("opus-4".into()),
+            agent: AgentId::claude("opus-4"),
             content: content.into(),
             input_tokens: 100,
             output_tokens: 50,

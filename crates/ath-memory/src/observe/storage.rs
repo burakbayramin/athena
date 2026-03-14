@@ -154,7 +154,7 @@ impl ObservationReader {
 mod tests {
     use super::*;
     use crate::observe::types::{FileOpKind, ObservationType};
-    use ath_types::{AgentKind, Severity, TokenUsage};
+    use ath_types::{AgentId, Severity, TokenUsage};
     use chrono::Utc;
     use tempfile::TempDir;
 
@@ -165,7 +165,7 @@ mod tests {
             timestamp: Utc::now(),
             phase_id: Some(1),
             event: ObservationType::AgentRequest {
-                agent: AgentKind::Claude("opus-4".into()),
+                agent: AgentId::claude("opus-4"),
                 prompt_summary: "Analyze code".into(),
                 phase_id: Some(1),
                 task_name: Some("analysis".into()),
@@ -306,13 +306,13 @@ mod tests {
 
         let events = vec![
             ObservationType::AgentRequest {
-                agent: AgentKind::Claude("opus-4".into()),
+                agent: AgentId::claude("opus-4"),
                 prompt_summary: "test".into(),
                 phase_id: Some(1),
                 task_name: None,
             },
             ObservationType::AgentResponse {
-                agent: AgentKind::Gemini("2.5-pro".into()),
+                agent: AgentId::gemini("2.5-pro"),
                 token_usage: TokenUsage {
                     input_tokens: 100,
                     output_tokens: 50,
@@ -322,7 +322,7 @@ mod tests {
                 task_name: Some("gen".into()),
             },
             ObservationType::ReviewVerdict {
-                reviewer: AgentKind::Codex("o3".into()),
+                reviewer: AgentId::codex("o3"),
                 passed: true,
                 severity: Severity::Info,
                 reason_summary: "Looks good".into(),
@@ -345,7 +345,7 @@ mod tests {
                 severity: Severity::Warning,
             },
             ObservationType::RoutingDecision {
-                agent: AgentKind::Claude("opus-4".into()),
+                agent: AgentId::claude("opus-4"),
                 task_name: "audit".into(),
                 reason: "Best for security".into(),
                 phase_id: Some(3),

@@ -7,7 +7,7 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use crate::agent::AgentKind;
+use crate::agent::AgentId;
 use crate::review::ReviewVerdict;
 
 /// Token usage statistics for an agent interaction.
@@ -25,7 +25,7 @@ pub struct TokenUsage {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct AgentContribution {
     /// The agent that contributed.
-    pub agent: AgentKind,
+    pub agent: AgentId,
     /// Token usage for this contribution.
     pub tokens: TokenUsage,
     /// Files produced by this agent.
@@ -68,7 +68,7 @@ pub struct PhaseRecord {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::agent::AgentKind;
+    use crate::agent::AgentId;
     use crate::review::{CodeSuggestion, ReviewVerdict, Severity};
 
     #[test]
@@ -81,7 +81,7 @@ mod tests {
             completed_at: Some(Utc::now()),
             contributions: vec![
                 AgentContribution {
-                    agent: AgentKind::Claude("opus-4".into()),
+                    agent: AgentId::claude("opus-4"),
                     tokens: TokenUsage {
                         input_tokens: 5000,
                         output_tokens: 2000,
@@ -90,7 +90,7 @@ mod tests {
                     files_produced: vec!["src/lib.rs".into(), "src/main.rs".into()],
                 },
                 AgentContribution {
-                    agent: AgentKind::Gemini("2.5-pro".into()),
+                    agent: AgentId::gemini("2.5-pro"),
                     tokens: TokenUsage {
                         input_tokens: 3000,
                         output_tokens: 1000,
@@ -104,7 +104,7 @@ mod tests {
                     attempt_number: 1,
                     verdict: ReviewVerdict {
                         passed: false,
-                        reviewer: AgentKind::Codex("o3".into()),
+                        reviewer: AgentId::codex("o3"),
                         severity: Severity::Critical,
                         reason: "Missing error handling".into(),
                         suggestions: vec![CodeSuggestion {
@@ -124,7 +124,7 @@ mod tests {
                     attempt_number: 2,
                     verdict: ReviewVerdict {
                         passed: true,
-                        reviewer: AgentKind::Codex("o3".into()),
+                        reviewer: AgentId::codex("o3"),
                         severity: Severity::Info,
                         reason: "All issues addressed".into(),
                         suggestions: vec![],

@@ -6,9 +6,8 @@
 //! fallback, and uses priority tiebreaking (Claude > Gemini > Codex).
 
 use std::collections::HashMap;
-use std::mem;
 
-use ath_types::agent::AgentKind;
+use ath_types::agent::AgentId;
 use ath_types::plan::TaskSpec;
 use ath_types::review::{CodeSuggestion, ReviewVerdict, Severity};
 use serde::Deserialize;
@@ -28,10 +27,10 @@ pub enum ReviewError {
 }
 
 /// All three agent kinds in priority order (Claude > Gemini > Codex).
-const CANDIDATE_ORDER: [fn() -> AgentKind; 3] = [
-    || AgentKind::Claude("opus-4".into()),
-    || AgentKind::Gemini("2.5-pro".into()),
-    || AgentKind::Codex("o3".into()),
+const CANDIDATE_ORDER: [fn() -> AgentId; 3] = [
+    || AgentId::claude("opus-4"),
+    || AgentId::gemini("2.5-pro"),
+    || AgentId::codex("o3"),
 ];
 
 /// Selects a reviewer agent that is different from the majority author.
@@ -43,10 +42,10 @@ const CANDIDATE_ORDER: [fn() -> AgentKind; 3] = [
 /// 4. Return the first available candidate.
 /// 5. If none available, return `NoReviewerAvailable`.
 pub fn select_reviewer(
-    task_agents: &[AgentKind],
+    task_agents: &[AgentId],
     phase_name: &str,
-    available: impl Fn(&AgentKind) -> bool,
-) -> Result<AgentKind, ReviewError> {
+    available: impl Fn(&AgentId) -> bool,
+) -> Result<AgentId, ReviewError> {
     if task_agents.is_empty() {
         return Err(ReviewError::NoReviewerAvailable {
             phase_name: phase_name.into(),
@@ -54,32 +53,31 @@ pub fn select_reviewer(
         });
     }
 
-    // Count tasks per agent discriminant, track priority index for tiebreaking
-    let mut counts: HashMap<mem::Discriminant<AgentKind>, (usize, usize)> = HashMap::new();
+    // Count tasks per provider, track priority index for tiebreaking
+    let mut counts: HashMap<String, (usize, usize)> = HashMap::new();
     for agent in task_agents {
-        let disc = mem::discriminant(agent);
+        let provider = agent.provider().to_string();
         let priority = priority_index(agent);
         counts
-            .entry(disc)
+            .entry(provider)
             .and_modify(|(count, _)| *count += 1)
             .or_insert((1, priority));
     }
 
     // Find majority author: highest count, then lowest priority index (= highest priority) for ties
-    let majority_disc = counts
+    let majority_provider = counts
         .iter()
         .max_by(|a, b| {
             a.1 .0
                 .cmp(&b.1 .0) // higher count wins
                 .then(b.1 .1.cmp(&a.1 .1)) // lower priority index wins (= higher priority)
         })
-        .map(|(disc, _)| *disc);
+        .map(|(provider, _)| provider.clone());
 
     // Iterate candidates in priority order, skip majority author
     for make_candidate in &CANDIDATE_ORDER {
         let candidate = make_candidate();
-        let disc = mem::discriminant(&candidate);
-        if Some(disc) == majority_disc {
+        if Some(candidate.provider().to_string()) == majority_provider {
             continue;
         }
         if available(&candidate) {
@@ -164,7 +162,7 @@ struct RawSuggestion {
 ///
 /// Severity is parsed case-insensitively. Missing optional `suggestions` defaults
 /// to an empty list.
-pub fn parse_review_verdict(json: &str, reviewer: AgentKind) -> Result<ReviewVerdict, ReviewError> {
+pub fn parse_review_verdict(json: &str, reviewer: AgentId) -> Result<ReviewVerdict, ReviewError> {
     let raw: RawVerdict =
         serde_json::from_str(json).map_err(|e| ReviewError::VerdictParseFailed {
             raw: json.to_string(),
@@ -262,11 +260,15 @@ pub fn format_retry_feedback_context(feedback: &ReviewVerdict) -> String {
 }
 
 /// Returns the priority index for an agent (lower = higher priority).
-fn priority_index(agent: &AgentKind) -> usize {
-    match agent {
-        AgentKind::Claude(_) => 0,
-        AgentKind::Gemini(_) => 1,
-        AgentKind::Codex(_) => 2,
+fn priority_index(agent: &AgentId) -> usize {
+    if agent.is_claude() {
+        0
+    } else if agent.is_gemini() {
+        1
+    } else if agent.is_codex() {
+        2
+    } else {
+        3
     }
 }
 
@@ -276,16 +278,16 @@ mod tests {
     use crate::phase_runner::FileOutput;
     use ath_types::project::SkillTag;
 
-    fn always_available(_: &AgentKind) -> bool {
+    fn always_available(_: &AgentId) -> bool {
         true
     }
 
-    fn none_available(_: &AgentKind) -> bool {
+    fn none_available(_: &AgentId) -> bool {
         false
     }
 
-    fn exclude(kind_fn: fn() -> AgentKind) -> impl Fn(&AgentKind) -> bool {
-        move |agent: &AgentKind| mem::discriminant(agent) != mem::discriminant(&kind_fn())
+    fn exclude(kind_fn: fn() -> AgentId) -> impl Fn(&AgentId) -> bool {
+        move |agent: &AgentId| agent.provider() != kind_fn().provider()
     }
 
     fn sample_task(name: &str, desc: &str) -> TaskSpec {
@@ -300,7 +302,7 @@ mod tests {
         }
     }
 
-    fn sample_output(task_name: &str, agent: AgentKind) -> TaskOutput {
+    fn sample_output(task_name: &str, agent: AgentId) -> TaskOutput {
         TaskOutput {
             task_name: task_name.into(),
             agent,
@@ -320,59 +322,59 @@ mod tests {
     // Test 1: Single Claude-authored phase selects Gemini as reviewer
     #[test]
     fn single_claude_author_selects_gemini() {
-        let agents = vec![AgentKind::Claude("opus-4".into())];
+        let agents = vec![AgentId::claude("opus-4")];
         let reviewer = select_reviewer(&agents, "test-phase", always_available).unwrap();
-        assert!(matches!(reviewer, AgentKind::Gemini(_)));
+        assert!(reviewer.is_gemini());
     }
 
     // Test 2: Single Gemini-authored phase selects Claude as reviewer
     #[test]
     fn single_gemini_author_selects_claude() {
-        let agents = vec![AgentKind::Gemini("2.5-pro".into())];
+        let agents = vec![AgentId::gemini("2.5-pro")];
         let reviewer = select_reviewer(&agents, "test-phase", always_available).unwrap();
-        assert!(matches!(reviewer, AgentKind::Claude(_)));
+        assert!(reviewer.is_claude());
     }
 
     // Test 3: Multi-author phase (2 Claude, 1 Gemini) excludes Claude, selects Gemini
     #[test]
     fn majority_claude_selects_gemini() {
         let agents = vec![
-            AgentKind::Claude("opus-4".into()),
-            AgentKind::Claude("opus-4".into()),
-            AgentKind::Gemini("2.5-pro".into()),
+            AgentId::claude("opus-4"),
+            AgentId::claude("opus-4"),
+            AgentId::gemini("2.5-pro"),
         ];
         let reviewer = select_reviewer(&agents, "test-phase", always_available).unwrap();
-        assert!(matches!(reviewer, AgentKind::Gemini(_)));
+        assert!(reviewer.is_gemini());
     }
 
     // Test 4: Tie (1 Claude, 1 Gemini) excludes Claude (higher priority = majority tiebreak), selects Gemini
     #[test]
     fn tie_excludes_higher_priority_selects_next() {
         let agents = vec![
-            AgentKind::Claude("opus-4".into()),
-            AgentKind::Gemini("2.5-pro".into()),
+            AgentId::claude("opus-4"),
+            AgentId::gemini("2.5-pro"),
         ];
         let reviewer = select_reviewer(&agents, "test-phase", always_available).unwrap();
-        assert!(matches!(reviewer, AgentKind::Gemini(_)));
+        assert!(reviewer.is_gemini());
     }
 
     // Test 5: Preferred reviewer circuit breaker tripped, falls back to next
     #[test]
     fn fallback_when_preferred_unavailable() {
-        let agents = vec![AgentKind::Gemini("2.5-pro".into())];
+        let agents = vec![AgentId::gemini("2.5-pro")];
         let reviewer = select_reviewer(
             &agents,
             "test-phase",
-            exclude(|| AgentKind::Claude("".into())),
+            exclude(|| AgentId::claude("")),
         )
         .unwrap();
-        assert!(matches!(reviewer, AgentKind::Codex(_)));
+        assert!(reviewer.is_codex());
     }
 
     // Test 6: ALL non-author agents unavailable -> error
     #[test]
     fn error_when_all_non_author_unavailable() {
-        let agents = vec![AgentKind::Claude("opus-4".into())];
+        let agents = vec![AgentId::claude("opus-4")];
         let result = select_reviewer(&agents, "my-phase", none_available);
         assert!(result.is_err());
         let err = result.unwrap_err();
@@ -384,14 +386,14 @@ mod tests {
     // Test 7: Codex-only phase with Claude unavailable selects Gemini
     #[test]
     fn codex_only_claude_unavailable_selects_gemini() {
-        let agents = vec![AgentKind::Codex("o3".into())];
+        let agents = vec![AgentId::codex("o3")];
         let reviewer = select_reviewer(
             &agents,
             "test-phase",
-            exclude(|| AgentKind::Claude("".into())),
+            exclude(|| AgentId::claude("")),
         )
         .unwrap();
-        assert!(matches!(reviewer, AgentKind::Gemini(_)));
+        assert!(reviewer.is_gemini());
     }
 
     // ==================== build_review_prompt tests ====================
@@ -400,7 +402,7 @@ mod tests {
     #[test]
     fn review_prompt_includes_task_and_files() {
         let task = sample_task("Build API", "Create REST endpoints");
-        let output = sample_output("Build API", AgentKind::Claude("opus-4".into()));
+        let output = sample_output("Build API", AgentId::claude("opus-4"));
 
         let prompt = build_review_prompt("api-phase", &[task], &[output]);
 
@@ -420,10 +422,10 @@ mod tests {
             sample_task("Task B", "Second task"),
         ];
         let outputs = vec![
-            sample_output("Task A", AgentKind::Claude("opus-4".into())),
+            sample_output("Task A", AgentId::claude("opus-4")),
             TaskOutput {
                 task_name: "Task B".into(),
-                agent: AgentKind::Gemini("2.5-pro".into()),
+                agent: AgentId::gemini("2.5-pro"),
                 files_produced: vec![FileOutput {
                     path: "src/lib.rs".into(),
                     content: "pub fn lib() {}".into(),
@@ -458,12 +460,12 @@ mod tests {
             ]
         }"#;
 
-        let verdict = parse_review_verdict(json, AgentKind::Gemini("2.5-pro".into())).unwrap();
+        let verdict = parse_review_verdict(json, AgentId::gemini("2.5-pro")).unwrap();
 
         assert!(!verdict.passed);
         assert_eq!(verdict.severity, Severity::Critical);
         assert_eq!(verdict.reason, "Security vulnerability found");
-        assert!(matches!(verdict.reviewer, AgentKind::Gemini(_)));
+        assert!(verdict.reviewer.is_gemini());
         assert_eq!(verdict.suggestions.len(), 1);
         assert_eq!(verdict.suggestions[0].file, "src/auth.rs");
         assert_eq!(verdict.suggestions[0].line, Some(42));
@@ -472,7 +474,7 @@ mod tests {
     // Test 4: parse_review_verdict returns error on malformed JSON
     #[test]
     fn parse_malformed_json_returns_error() {
-        let result = parse_review_verdict("not json", AgentKind::Claude("opus-4".into()));
+        let result = parse_review_verdict("not json", AgentId::claude("opus-4"));
         assert!(result.is_err());
         let err = result.unwrap_err();
         assert!(matches!(err, ReviewError::VerdictParseFailed { .. }));
@@ -488,7 +490,7 @@ mod tests {
             "reason": "Looks good"
         }"#;
 
-        let verdict = parse_review_verdict(json, AgentKind::Claude("opus-4".into())).unwrap();
+        let verdict = parse_review_verdict(json, AgentId::claude("opus-4")).unwrap();
 
         assert!(verdict.passed);
         assert_eq!(verdict.severity, Severity::Info);
@@ -519,7 +521,7 @@ mod tests {
         let task = sample_task("Fix Auth", "Fix the authentication module");
         let feedback = ReviewVerdict {
             passed: false,
-            reviewer: AgentKind::Gemini("2.5-pro".into()),
+            reviewer: AgentId::gemini("2.5-pro"),
             severity: Severity::Critical,
             reason: "Multiple issues found".into(),
             suggestions: (0..7)
@@ -552,7 +554,7 @@ mod tests {
         let long_reason = "x".repeat(600);
         let feedback = ReviewVerdict {
             passed: false,
-            reviewer: AgentKind::Claude("opus-4".into()),
+            reviewer: AgentId::claude("opus-4"),
             severity: Severity::Warning,
             reason: long_reason,
             suggestions: vec![],
@@ -571,7 +573,7 @@ mod tests {
     #[test]
     fn parse_verdict_case_insensitive_severity() {
         let json = r#"{"passed": true, "severity": "WARNING", "reason": "ok", "suggestions": []}"#;
-        let verdict = parse_review_verdict(json, AgentKind::Claude("opus-4".into())).unwrap();
+        let verdict = parse_review_verdict(json, AgentId::claude("opus-4")).unwrap();
         assert_eq!(verdict.severity, Severity::Warning);
     }
 
@@ -581,7 +583,7 @@ mod tests {
         let task = sample_task("Task", "Desc");
         let feedback = ReviewVerdict {
             passed: false,
-            reviewer: AgentKind::Claude("opus-4".into()),
+            reviewer: AgentId::claude("opus-4"),
             severity: Severity::Info,
             reason: "Minor issue".into(),
             suggestions: vec![CodeSuggestion {

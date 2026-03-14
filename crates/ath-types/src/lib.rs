@@ -19,7 +19,8 @@ pub mod report;
 pub mod review;
 
 // Re-export key types at crate root for ergonomic imports
-pub use agent::{AgentKind, AgentRequest, AgentResponse};
+#[allow(deprecated)]
+pub use agent::{AgentId, AgentKind, AgentRequest, AgentResponse};
 pub use error::ValidationError;
 pub use phase::{AgentContribution, PhaseRecord, ReviewAttempt, TokenUsage};
 pub use plan::{ContractLabel, ExecutionPlan, PhaseSpec, TaskSpec};

@@ -508,7 +508,7 @@ pub(crate) mod tests {
     use crate::observe::storage::ObservationWriter;
     use crate::observe::types::{ObservationType, Observation};
     use async_trait::async_trait;
-    use ath_types::{AgentKind, Severity, TokenUsage};
+    use ath_types::{AgentId, Severity, TokenUsage};
     use chrono::Utc;
     use tempfile::TempDir;
     use uuid::Uuid;
@@ -694,7 +694,7 @@ pub(crate) mod tests {
                 timestamp: now,
                 phase_id: Some(1),
                 event: ObservationType::AgentRequest {
-                    agent: AgentKind::Claude("opus-4".into()),
+                    agent: AgentId::claude("opus-4"),
                     prompt_summary: "Plan authentication module".into(),
                     phase_id: Some(1),
                     task_name: Some("auth-planning".into()),
@@ -706,7 +706,7 @@ pub(crate) mod tests {
                 timestamp: now,
                 phase_id: Some(1),
                 event: ObservationType::AgentResponse {
-                    agent: AgentKind::Claude("opus-4".into()),
+                    agent: AgentId::claude("opus-4"),
                     token_usage: TokenUsage {
                         input_tokens: 3000,
                         output_tokens: 1500,
@@ -733,7 +733,7 @@ pub(crate) mod tests {
                 timestamp: now,
                 phase_id: Some(3),
                 event: ObservationType::ReviewVerdict {
-                    reviewer: AgentKind::Codex("o3".into()),
+                    reviewer: AgentId::codex("o3"),
                     passed: false,
                     severity: Severity::Warning,
                     reason_summary: "Missing error handling in auth flow".into(),
@@ -758,7 +758,7 @@ pub(crate) mod tests {
                 timestamp: now,
                 phase_id: Some(3),
                 event: ObservationType::ReviewVerdict {
-                    reviewer: AgentKind::Codex("o3".into()),
+                    reviewer: AgentId::codex("o3"),
                     passed: true,
                     severity: Severity::Info,
                     reason_summary: "All issues resolved".into(),

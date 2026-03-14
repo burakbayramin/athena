@@ -8,7 +8,7 @@
 //! to `PhaseRunnerError`. The orchestrator continues identically whether memory
 //! succeeds or fails.
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use async_trait::async_trait;
@@ -20,11 +20,12 @@ use ath_memory::{
     KeywordIndex, MemoryError, MemoryExtractor, ObservationBuffer, ObservationType,
     ObservationWriter, VikingStore,
 };
-use ath_types::agent::{AgentKind, AgentRequest};
+use ath_types::agent::{AgentId, AgentRequest};
 use ath_types::phase::PhaseRecord;
 use ath_types::plan::{ExecutionPlan, PhaseSpec};
 use ath_types::review::ReviewVerdict;
 
+use crate::checkpoint::{Checkpoint, CheckpointStore, plan_fingerprint};
 use crate::coordinator::AgentCoordinator;
 use crate::error::PhaseRunnerError;
 use crate::phase_runner::{AgentRegistry, FileOutput};
@@ -69,16 +70,16 @@ pub struct MemoryContext {
 
 /// Bridges `AgentBackend` → `ExtractionLlm` for the extraction pipeline.
 ///
-/// Wraps an `Arc<dyn AgentBackend>` and an `AgentKind`, constructing
+/// Wraps an `Arc<dyn AgentBackend>` and an `AgentId`, constructing
 /// `AgentRequest`s for extraction prompts and forwarding to the backend.
 pub struct BackendLlmAdapter {
     backend: Arc<dyn AgentBackend>,
-    agent_kind: AgentKind,
+    agent_kind: AgentId,
 }
 
 impl BackendLlmAdapter {
     /// Create a new adapter for the given backend and agent kind.
-    pub fn new(backend: Arc<dyn AgentBackend>, agent_kind: AgentKind) -> Self {
+    pub fn new(backend: Arc<dyn AgentBackend>, agent_kind: AgentId) -> Self {
         Self {
             backend,
             agent_kind,
@@ -168,7 +169,7 @@ pub fn inject_context(
 pub async fn run_phase_with_memory(
     phase: &PhaseSpec,
     registry: &AgentRegistry,
-    available: impl Fn(&AgentKind) -> bool,
+    available: impl Fn(&AgentId) -> bool,
     write_files: impl Fn(&[FileOutput]) -> Result<(), PhaseRunnerError>,
     git: Option<&ath_git::async_ops::AsyncGitLayer>,
     observer: Option<SharedProgressObserver>,
@@ -180,7 +181,7 @@ pub async fn run_phase_with_memory(
     let started_at = chrono::Utc::now();
 
     // Collect task agents for reviewer selection
-    let task_agents: Vec<AgentKind> = phase
+    let task_agents: Vec<AgentId> = phase
         .tasks
         .iter()
         .filter_map(|t| t.assigned_agent.clone())
@@ -621,7 +622,7 @@ fn truncate_for_summary(text: &str, max_chars: usize) -> String {
 /// Reused from phase_runner — merge agent contributions.
 fn merge_contribution(
     contributions: &mut Vec<ath_types::phase::AgentContribution>,
-    agent: &AgentKind,
+    agent: &AgentId,
     input_tokens: u64,
     output_tokens: u64,
     file_paths: impl IntoIterator<Item = String>,
@@ -675,6 +676,7 @@ impl AgentCoordinator {
         plan: &ExecutionPlan,
         observer: Option<SharedProgressObserver>,
         memory: MemoryContext,
+        checkpoint_path: Option<&Path>,
     ) -> Result<Vec<PhaseRecord>, PhaseRunnerError> {
         // Pre-dispatch: validate isolation
         crate::isolation::check_isolation(plan).map_err(|e| {
@@ -683,7 +685,40 @@ impl AgentCoordinator {
             }
         })?;
 
-        let mut results: Vec<PhaseRecord> = Vec::new();
+        // Load or create checkpoint if checkpointing is enabled
+        let mut checkpoint = match checkpoint_path {
+            Some(cp_path) => {
+                let existing = CheckpointStore::load(cp_path)?;
+                match existing {
+                    Some(cp) if cp.is_stale(plan) => {
+                        return Err(PhaseRunnerError::TaskExecutionFailed {
+                            task_name: "checkpoint".into(),
+                            agent: "coordinator".into(),
+                            reason: format!(
+                                "Stale checkpoint: plan has changed since the last run. \
+                                 Use --fresh to start a clean run. \
+                                 Checkpoint fingerprint: {}, current: {}",
+                                cp.plan_fingerprint,
+                                plan_fingerprint(plan)
+                            ),
+                        });
+                    }
+                    Some(cp) => Some(cp),
+                    None => Some(Checkpoint::new(
+                        format!("run-{}", chrono::Utc::now().timestamp_nanos_opt().unwrap_or(0)),
+                        plan,
+                    )),
+                }
+            }
+            None => None,
+        };
+
+        // Pre-populate results from checkpoint
+        let mut results: Vec<PhaseRecord> = checkpoint
+            .as_ref()
+            .map(|cp| cp.completed_records.clone())
+            .unwrap_or_default();
+
         let total_phases = plan.execution_order.len();
 
         let effective_groups: Vec<Vec<u32>> = if plan.parallel_groups.is_empty() {
@@ -695,6 +730,27 @@ impl AgentCoordinator {
         let mut phases_processed: usize = 0;
 
         for group in &effective_groups {
+            // Skip groups that are fully completed in the checkpoint
+            if let Some(ref cp) = checkpoint {
+                if cp.should_skip_group(group) {
+                    for &phase_id in group {
+                        if let Some(phase) = plan.phases.iter().find(|p| p.id == phase_id) {
+                            phases_processed += 1;
+                            emit_progress(
+                                observer.as_ref(),
+                                ProgressEvent::PhaseRestored {
+                                    phase_id: phase.id,
+                                    phase_name: phase.name.clone(),
+                                    phase_index: phases_processed,
+                                    total_phases,
+                                },
+                            );
+                        }
+                    }
+                    continue;
+                }
+            }
+
             // For memory-aware execution, we run phases sequentially within groups
             // to ensure observation ordering is deterministic.
             // Parallel memory-aware execution is a future enhancement.
@@ -729,7 +785,7 @@ impl AgentCoordinator {
 
                 let registry = &*self.registry;
                 let available =
-                    |kind: &AgentKind| -> bool { registry.get(kind).is_some() };
+                    |kind: &AgentId| -> bool { registry.get(kind).is_some() };
 
                 let record = run_phase_with_memory(
                     phase,
@@ -755,6 +811,25 @@ impl AgentCoordinator {
                 results.push(record);
                 phases_processed += 1;
             }
+
+            // Save checkpoint after group completes (with all phases in the group)
+            if let (Some(ref mut cp), Some(cp_path)) = (&mut checkpoint, checkpoint_path) {
+                // Collect records from this group that aren't in the checkpoint yet
+                let new_records: Vec<PhaseRecord> = results
+                    .iter()
+                    .filter(|r| !cp.completed_phase_ids.contains(&r.phase_id))
+                    .cloned()
+                    .collect();
+                if !new_records.is_empty() {
+                    cp.add_records(new_records);
+                    let _ = CheckpointStore::save(cp_path, cp);
+                }
+            }
+        }
+
+        // All groups completed — clean up checkpoint
+        if let Some(cp_path) = checkpoint_path {
+            let _ = CheckpointStore::delete(cp_path);
         }
 
         // Post-run: flush observations and run extraction (all fail-soft)
@@ -863,12 +938,12 @@ impl AgentCoordinator {
     ///
     /// Tries Claude, Gemini, Codex in that order. Returns the backend
     /// and the agent kind to use for constructing requests.
-    fn pick_extraction_backend(&self) -> Option<(Arc<dyn AgentBackend>, AgentKind)> {
+    fn pick_extraction_backend(&self) -> Option<(Arc<dyn AgentBackend>, AgentId)> {
         // Try common agent kinds in priority order
         let candidates = [
-            AgentKind::Claude("default".into()),
-            AgentKind::Gemini("default".into()),
-            AgentKind::Codex("default".into()),
+            AgentId::claude("default"),
+            AgentId::gemini("default"),
+            AgentId::codex("default"),
         ];
 
         for kind in &candidates {
@@ -907,7 +982,7 @@ fn write_files_to_dir(
 mod tests {
     use super::*;
     use ath_agents::MockBackend;
-    use ath_types::agent::{AgentKind, AgentResponse};
+    use ath_types::agent::{AgentId, AgentResponse};
     use ath_types::plan::{PhaseSpec, TaskSpec};
     use ath_types::project::SkillTag;
     use std::sync::Arc;
@@ -915,7 +990,7 @@ mod tests {
 
     // ==================== Helpers ====================
 
-    fn make_task_spec(name: &str, agent: Option<AgentKind>) -> TaskSpec {
+    fn make_task_spec(name: &str, agent: Option<AgentId>) -> TaskSpec {
         TaskSpec {
             name: name.into(),
             description: format!("Implement {name}"),
@@ -927,7 +1002,7 @@ mod tests {
         }
     }
 
-    fn make_task_output_json(task_name: &str, agent: &AgentKind, file_path: &str) -> String {
+    fn make_task_output_json(task_name: &str, agent: &AgentId, file_path: &str) -> String {
         let agent_json = serde_json::to_string(agent).unwrap();
         format!(
             r#"{{"task_name":"{}","agent":{},"files_produced":[{{"path":"{}","content":"fn main() {{}}"}}],"explanation":"Done","issues_encountered":[],"input_tokens":100,"output_tokens":50}}"#,
@@ -980,7 +1055,7 @@ mod tests {
 
     #[tokio::test]
     async fn backend_llm_adapter_forwards_prompt() {
-        let claude = AgentKind::Claude("opus-4".into());
+        let claude = AgentId::claude("opus-4");
         let mock = Arc::new(MockBackend::always_ok("test response"));
         let adapter = BackendLlmAdapter::new(mock, claude);
 
@@ -991,7 +1066,7 @@ mod tests {
 
     #[tokio::test]
     async fn backend_llm_adapter_maps_error_to_memory_error() {
-        let claude = AgentKind::Claude("opus-4".into());
+        let claude = AgentId::claude("opus-4");
         let mock = Arc::new(MockBackend::failing(|| {
             ath_agents::AgentError::Timeout {
                 provider: "test".into(),
@@ -1010,7 +1085,7 @@ mod tests {
     /// including JSON schema forwarding.
     #[tokio::test]
     async fn backend_llm_adapter_bridges_correctly() {
-        let claude = AgentKind::Claude("opus-4".into());
+        let claude = AgentId::claude("opus-4");
         let mock = Arc::new(MockBackend::always_ok("extraction result"));
         let adapter = BackendLlmAdapter::new(mock, claude);
 
@@ -1035,7 +1110,7 @@ mod tests {
         record_observation(
             &buffer,
             ObservationType::AgentRequest {
-                agent: AgentKind::Claude("opus-4".into()),
+                agent: AgentId::claude("opus-4"),
                 prompt_summary: "test".into(),
                 phase_id: Some(1),
                 task_name: Some("task-1".into()),
@@ -1117,8 +1192,8 @@ mod tests {
     /// - At minimum: 1 request + 1 response for the task, plus 1 review verdict
     #[tokio::test]
     async fn memory_context_records_observations() {
-        let claude = AgentKind::Claude("opus-4".into());
-        let gemini = AgentKind::Gemini("2.5-pro".into());
+        let claude = AgentId::claude("opus-4");
+        let gemini = AgentId::gemini("2.5-pro");
 
         let tasks = vec![make_task_spec("task-1", Some(claude.clone()))];
         let phase = make_phase(1, "phase-1", tasks);
@@ -1143,7 +1218,7 @@ mod tests {
 
         let coordinator = AgentCoordinator::new(registry, output_dir, None);
         let result = coordinator
-            .run_plan_with_memory(&plan, None, memory)
+            .run_plan_with_memory(&plan, None, memory, None)
             .await;
 
         assert!(result.is_ok());
@@ -1248,8 +1323,8 @@ mod tests {
             index_path: memory_tmp.path().join("index").join("keyword.json"),
         };
 
-        let claude = AgentKind::Claude("opus-4".into());
-        let gemini = AgentKind::Gemini("2.5-pro".into());
+        let claude = AgentId::claude("opus-4");
+        let gemini = AgentId::gemini("2.5-pro");
 
         let tasks = vec![make_task_spec("task-1", Some(claude.clone()))];
         let phase = make_phase(1, "phase-1", tasks);
@@ -1270,7 +1345,7 @@ mod tests {
         let coordinator = AgentCoordinator::new(registry, output_tmp.path().to_path_buf(), None);
 
         let result = coordinator
-            .run_plan_with_memory(&plan, None, memory)
+            .run_plan_with_memory(&plan, None, memory, None)
             .await;
         assert!(result.is_ok());
 
@@ -1309,8 +1384,8 @@ mod tests {
     /// memory failures silently logged as warnings.
     #[tokio::test]
     async fn memory_errors_do_not_fail_run() {
-        let claude = AgentKind::Claude("opus-4".into());
-        let gemini = AgentKind::Gemini("2.5-pro".into());
+        let claude = AgentId::claude("opus-4");
+        let gemini = AgentId::gemini("2.5-pro");
 
         let tasks = vec![make_task_spec("task-1", Some(claude.clone()))];
         let phase = make_phase(1, "phase-1", tasks);
@@ -1359,7 +1434,7 @@ mod tests {
         // The run should succeed even though observation flush will fail
         // (broken observations_root path). Memory errors are swallowed.
         let result = coordinator
-            .run_plan_with_memory(&plan, None, memory)
+            .run_plan_with_memory(&plan, None, memory, None)
             .await;
 
         assert!(
@@ -1378,8 +1453,8 @@ mod tests {
     async fn memory_run_plan_existing_tests_behavior_preserved() {
         // Verify that run_plan_with_memory produces the same results
         // as run_plan for a basic scenario.
-        let claude = AgentKind::Claude("opus-4".into());
-        let gemini = AgentKind::Gemini("2.5-pro".into());
+        let claude = AgentId::claude("opus-4");
+        let gemini = AgentId::gemini("2.5-pro");
 
         let tasks = vec![make_task_spec("task-1", Some(claude.clone()))];
         let phase = make_phase(1, "phase-1", tasks);
@@ -1404,7 +1479,7 @@ mod tests {
 
         let coordinator = AgentCoordinator::new(registry, output_dir, None);
         let records = coordinator
-            .run_plan_with_memory(&plan, None, memory)
+            .run_plan_with_memory(&plan, None, memory, None)
             .await
             .unwrap();
 
@@ -1431,8 +1506,8 @@ mod tests {
     async fn two_run_end_to_end_memory_lifecycle() {
         use chrono::Utc;
 
-        let claude = AgentKind::Claude("opus-4".into());
-        let gemini = AgentKind::Gemini("2.5-pro".into());
+        let claude = AgentId::claude("opus-4");
+        let gemini = AgentId::gemini("2.5-pro");
 
         // -- Shared temp dir root for both runs --
         let shared_tmp = TempDir::new().unwrap();
@@ -1533,7 +1608,7 @@ mod tests {
 
         let coordinator1 = AgentCoordinator::new(registry1, output_dir.clone(), None);
         let result1 = coordinator1
-            .run_plan_with_memory(&plan, None, memory1)
+            .run_plan_with_memory(&plan, None, memory1, None)
             .await;
 
         assert!(result1.is_ok(), "Run 1 should succeed: {:?}", result1.err());
@@ -1605,7 +1680,7 @@ mod tests {
 
         let coordinator2 = AgentCoordinator::new(registry2, output_dir.clone(), None);
         let result2 = coordinator2
-            .run_plan_with_memory(&plan2, None, memory2)
+            .run_plan_with_memory(&plan2, None, memory2, None)
             .await;
 
         assert!(result2.is_ok(), "Run 2 should succeed: {:?}", result2.err());
@@ -1698,8 +1773,8 @@ mod tests {
     /// that loading the index back yields a non-empty index.
     #[tokio::test]
     async fn keyword_index_persisted_after_extraction() {
-        let claude = AgentKind::Claude("opus-4".into());
-        let gemini = AgentKind::Gemini("2.5-pro".into());
+        let claude = AgentId::claude("opus-4");
+        let gemini = AgentId::gemini("2.5-pro");
 
         let tasks = vec![make_task_spec("task-1", Some(claude.clone()))];
         let phase = make_phase(1, "phase-1", tasks);
@@ -1727,7 +1802,7 @@ mod tests {
 
         let coordinator = AgentCoordinator::new(registry, output_dir, None);
         let result = coordinator
-            .run_plan_with_memory(&plan, None, memory)
+            .run_plan_with_memory(&plan, None, memory, None)
             .await;
 
         assert!(result.is_ok(), "run should succeed: {:?}", result.err());

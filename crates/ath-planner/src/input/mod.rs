@@ -209,7 +209,7 @@ pub fn display_project_spec_summary(spec: &ProjectSpec) {
 mod tests {
     use super::*;
     use ath_agents::mock::MockBackend;
-    use ath_types::agent::{AgentKind, AgentResponse};
+    use ath_types::agent::{AgentId, AgentResponse};
     use chrono::Utc;
     use std::path::Path;
     use uuid::Uuid;
@@ -251,7 +251,7 @@ mod tests {
     fn make_response(content: &str) -> Result<AgentResponse, ath_agents::error::AgentError> {
         Ok(AgentResponse {
             request_id: Uuid::new_v4(),
-            agent: AgentKind::Claude("mock".into()),
+            agent: AgentId::claude("mock"),
             content: content.to_string(),
             input_tokens: 0,
             output_tokens: 0,

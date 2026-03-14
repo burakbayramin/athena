@@ -5,7 +5,7 @@
 
 use serde::{Deserialize, Serialize};
 
-use crate::agent::AgentKind;
+use crate::agent::AgentId;
 use crate::error::ValidationError;
 
 /// Severity level of a review finding. Only `Critical` blocks progress.
@@ -37,7 +37,7 @@ pub struct ReviewVerdict {
     /// Whether the review passed.
     pub passed: bool,
     /// The agent that performed the review.
-    pub reviewer: AgentKind,
+    pub reviewer: AgentId,
     /// The severity of the finding.
     pub severity: Severity,
     /// The reason for the verdict.
@@ -72,7 +72,7 @@ mod tests {
     fn critical_failing_verdict() -> ReviewVerdict {
         ReviewVerdict {
             passed: false,
-            reviewer: AgentKind::Claude("opus-4".into()),
+            reviewer: AgentId::claude("opus-4"),
             severity: Severity::Critical,
             reason: "Security vulnerability in auth module".into(),
             suggestions: vec![CodeSuggestion {
@@ -93,7 +93,7 @@ mod tests {
     fn warning_failure_does_not_block_progress() {
         let verdict = ReviewVerdict {
             passed: false,
-            reviewer: AgentKind::Gemini("2.5-pro".into()),
+            reviewer: AgentId::gemini("2.5-pro"),
             severity: Severity::Warning,
             reason: "Consider using more descriptive variable names".into(),
             suggestions: vec![],
@@ -105,7 +105,7 @@ mod tests {
     fn passing_critical_does_not_block() {
         let verdict = ReviewVerdict {
             passed: true,
-            reviewer: AgentKind::Claude("opus-4".into()),
+            reviewer: AgentId::claude("opus-4"),
             severity: Severity::Critical,
             reason: "All checks passed".into(),
             suggestions: vec![],
@@ -125,7 +125,7 @@ mod tests {
     fn review_verdict_preserves_suggestions_list() {
         let verdict = ReviewVerdict {
             passed: false,
-            reviewer: AgentKind::Codex("o3".into()),
+            reviewer: AgentId::codex("o3"),
             severity: Severity::Warning,
             reason: "Multiple style issues".into(),
             suggestions: vec![

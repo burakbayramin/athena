@@ -146,7 +146,7 @@ Respond with a single JSON object. No markdown fencing, no explanation — just 
 mod tests {
     use super::*;
     use crate::observe::types::{ObservationType, Observation};
-    use ath_types::AgentKind;
+    use ath_types::AgentId;
     use chrono::Utc;
     use uuid::Uuid;
 
@@ -157,7 +157,7 @@ mod tests {
             timestamp: Utc::now(),
             phase_id: Some(1),
             event: ObservationType::AgentRequest {
-                agent: AgentKind::Claude("opus-4".into()),
+                agent: AgentId::claude("opus-4"),
                 prompt_summary: summary.to_string(),
                 phase_id: Some(1),
                 task_name: Some("test".into()),

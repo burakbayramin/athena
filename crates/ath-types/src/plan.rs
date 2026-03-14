@@ -6,7 +6,7 @@
 
 use serde::{Deserialize, Serialize};
 
-use crate::agent::AgentKind;
+use crate::agent::AgentId;
 use crate::project::SkillTag;
 
 /// A named contract label for inter-phase produces/consumes tracking.
@@ -29,7 +29,7 @@ pub struct TaskSpec {
     pub goal_indices: Vec<usize>,
     /// Agent assigned to execute this task (None before routing, Some after).
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub assigned_agent: Option<AgentKind>,
+    pub assigned_agent: Option<AgentId>,
 }
 
 /// A phase in the execution plan.
@@ -153,7 +153,7 @@ mod tests {
     #[test]
     fn task_spec_assigned_agent_round_trip() {
         let mut task = sample_task();
-        task.assigned_agent = Some(AgentKind::Claude("opus-4".into()));
+        task.assigned_agent = Some(AgentId::claude("opus-4"));
         let json = serde_json::to_string(&task).expect("serialize");
         assert!(json.contains("assigned_agent"));
         let deserialized: TaskSpec = serde_json::from_str(&json).expect("deserialize");

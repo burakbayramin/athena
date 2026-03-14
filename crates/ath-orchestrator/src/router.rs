@@ -5,9 +5,8 @@
 //! (Claude > Gemini > Codex) and circuit-breaker-aware fallback.
 
 use std::collections::HashMap;
-use std::mem;
 
-use ath_types::agent::AgentKind;
+use ath_types::agent::AgentId;
 use ath_types::plan::PhaseSpec;
 use ath_types::project::SkillTag;
 
@@ -18,7 +17,7 @@ use crate::taxonomy;
 #[derive(Debug, Clone, PartialEq)]
 pub struct RoutingDecision {
     /// The agent selected for this task.
-    pub agent: AgentKind,
+    pub agent: AgentId,
     /// Human-readable explanation of why this agent was chosen.
     pub rationale: String,
 }
@@ -33,8 +32,8 @@ pub struct RoutingDecision {
 /// 5. If no candidates pass, return `AllAgentsUnavailable`.
 pub fn route_task(
     skill_tags: &[SkillTag],
-    table: &HashMap<String, AgentKind>,
-    available: impl Fn(&AgentKind) -> bool,
+    table: &HashMap<String, AgentId>,
+    available: impl Fn(&AgentId) -> bool,
 ) -> Result<RoutingDecision, IsolationError> {
     // Empty tags -> default
     if skill_tags.is_empty() {
@@ -45,17 +44,17 @@ pub fn route_task(
         });
     }
 
-    // Count votes by discriminant
-    // Map: discriminant -> (representative AgentKind, vote count)
-    let mut votes: HashMap<mem::Discriminant<AgentKind>, (AgentKind, usize)> = HashMap::new();
+    // Count votes by provider
+    // Map: provider -> (representative AgentId, vote count)
+    let mut votes: HashMap<String, (AgentId, usize)> = HashMap::new();
 
     let mut any_match = false;
     for tag in skill_tags {
         if let Some(agent) = taxonomy::lookup(&tag.0, table) {
             any_match = true;
-            let disc = mem::discriminant(&agent);
+            let provider = agent.provider().to_string();
             votes
-                .entry(disc)
+                .entry(provider)
                 .and_modify(|(_, count)| *count += 1)
                 .or_insert((agent, 1));
         }
@@ -71,7 +70,7 @@ pub fn route_task(
     }
 
     // Sort candidates: highest votes first, then lowest priority (tiebreak)
-    let mut candidates: Vec<(AgentKind, usize)> = votes.into_values().collect();
+    let mut candidates: Vec<(AgentId, usize)> = votes.into_values().collect();
     candidates.sort_by(|(a, count_a), (b, count_b)| {
         count_b
             .cmp(count_a)
@@ -82,15 +81,15 @@ pub fn route_task(
     let tag_strs: Vec<&str> = skill_tags.iter().map(|t| t.0.as_str()).collect();
     let claude_votes = candidates
         .iter()
-        .find(|(a, _)| matches!(a, AgentKind::Claude(_)))
+        .find(|(a, _)| a.is_claude())
         .map_or(0, |(_, c)| *c);
     let gemini_votes = candidates
         .iter()
-        .find(|(a, _)| matches!(a, AgentKind::Gemini(_)))
+        .find(|(a, _)| a.is_gemini())
         .map_or(0, |(_, c)| *c);
     let codex_votes = candidates
         .iter()
-        .find(|(a, _)| matches!(a, AgentKind::Codex(_)))
+        .find(|(a, _)| a.is_codex())
         .map_or(0, |(_, c)| *c);
 
     // Pick first available candidate
@@ -115,7 +114,7 @@ pub fn route_task(
     if available(&default)
         && !candidates
             .iter()
-            .any(|(a, _)| mem::discriminant(a) == mem::discriminant(&default))
+            .any(|(a, _)| a.provider() == default.provider())
     {
         return Ok(RoutingDecision {
             agent: default,
@@ -143,8 +142,8 @@ pub fn route_task(
 /// Returns the list of `RoutingDecision`s for verbose/diagnostic output.
 pub fn assign_all_tasks(
     phase: &mut PhaseSpec,
-    table: &HashMap<String, AgentKind>,
-    available: impl Fn(&AgentKind) -> bool,
+    table: &HashMap<String, AgentId>,
+    available: impl Fn(&AgentId) -> bool,
 ) -> Result<Vec<RoutingDecision>, IsolationError> {
     let mut decisions = Vec::with_capacity(phase.tasks.len());
 
@@ -173,7 +172,7 @@ mod tests {
         // "rust" -> Claude, "api" -> Gemini => 1-1 tie, Claude wins by priority
         let table = build_routing_table();
         let result = route_task(&tags(&["rust", "api"]), &table, |_| true).unwrap();
-        assert!(matches!(result.agent, AgentKind::Claude(_)));
+        assert!(result.agent.is_claude());
     }
 
     #[test]
@@ -181,7 +180,7 @@ mod tests {
         // "rust" -> Claude, "logic" -> Claude, "api" -> Gemini => 2-1, Claude wins
         let table = build_routing_table();
         let result = route_task(&tags(&["rust", "logic", "api"]), &table, |_| true).unwrap();
-        assert!(matches!(result.agent, AgentKind::Claude(_)));
+        assert!(result.agent.is_claude());
     }
 
     #[test]
@@ -189,7 +188,7 @@ mod tests {
         // "docs" -> Gemini, "research" -> Gemini, "api" -> Gemini => 3 Gemini
         let table = build_routing_table();
         let result = route_task(&tags(&["docs", "research", "api"]), &table, |_| true).unwrap();
-        assert!(matches!(result.agent, AgentKind::Gemini(_)));
+        assert!(result.agent.is_gemini());
     }
 
     #[test]
@@ -197,14 +196,14 @@ mod tests {
         // "codegen" -> Codex, "boilerplate" -> Codex => 2 Codex
         let table = build_routing_table();
         let result = route_task(&tags(&["codegen", "boilerplate"]), &table, |_| true).unwrap();
-        assert!(matches!(result.agent, AgentKind::Codex(_)));
+        assert!(result.agent.is_codex());
     }
 
     #[test]
     fn route_empty_tags_returns_claude_default() {
         let table = build_routing_table();
         let result = route_task(&tags(&[]), &table, |_| true).unwrap();
-        assert!(matches!(result.agent, AgentKind::Claude(_)));
+        assert!(result.agent.is_claude());
         assert!(result.rationale.contains("defaulting to Claude"));
     }
 
@@ -212,7 +211,7 @@ mod tests {
     fn route_unknown_tags_returns_claude_default() {
         let table = build_routing_table();
         let result = route_task(&tags(&["unknown1", "unknown2"]), &table, |_| true).unwrap();
-        assert!(matches!(result.agent, AgentKind::Claude(_)));
+        assert!(result.agent.is_claude());
         assert!(result.rationale.contains("defaulting to Claude"));
     }
 
@@ -222,10 +221,10 @@ mod tests {
         let table = build_routing_table();
         // Also add an api tag so Gemini is a candidate
         let result = route_task(&tags(&["rust", "logic", "api"]), &table, |a| {
-            !matches!(a, AgentKind::Claude(_))
+            !a.is_claude()
         })
         .unwrap();
-        assert!(matches!(result.agent, AgentKind::Gemini(_)));
+        assert!(result.agent.is_gemini());
     }
 
     #[test]
@@ -253,7 +252,7 @@ mod tests {
         // but the discriminant match means any Claude variant counts the same
         let table = build_routing_table();
         let result = route_task(&tags(&["rust", "architecture"]), &table, |_| true).unwrap();
-        assert!(matches!(result.agent, AgentKind::Claude(_)));
+        assert!(result.agent.is_claude());
     }
 
     #[test]
@@ -265,7 +264,7 @@ mod tests {
             |_| true,
         )
         .unwrap();
-        assert!(matches!(result.agent, AgentKind::Claude(_)));
+        assert!(result.agent.is_claude());
     }
 
     // --- assign_all_tasks tests ---
@@ -329,23 +328,14 @@ mod tests {
 
         let decisions = assign_all_tasks(&mut phase, &table, |_| true).unwrap();
 
-        assert!(matches!(
-            phase.tasks[0].assigned_agent,
-            Some(AgentKind::Claude(_))
-        ));
-        assert!(matches!(
-            phase.tasks[1].assigned_agent,
-            Some(AgentKind::Gemini(_))
-        ));
-        assert!(matches!(
-            phase.tasks[2].assigned_agent,
-            Some(AgentKind::Codex(_))
-        ));
+        assert!(phase.tasks[0].assigned_agent.as_ref().map_or(false, |a| a.is_claude()));
+        assert!(phase.tasks[1].assigned_agent.as_ref().map_or(false, |a| a.is_gemini()));
+        assert!(phase.tasks[2].assigned_agent.as_ref().map_or(false, |a| a.is_codex()));
 
         // Decisions match task agents
-        assert!(matches!(decisions[0].agent, AgentKind::Claude(_)));
-        assert!(matches!(decisions[1].agent, AgentKind::Gemini(_)));
-        assert!(matches!(decisions[2].agent, AgentKind::Codex(_)));
+        assert!(decisions[0].agent.is_claude());
+        assert!(decisions[1].agent.is_gemini());
+        assert!(decisions[2].agent.is_codex());
     }
 
     #[test]

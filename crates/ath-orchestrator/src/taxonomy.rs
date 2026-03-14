@@ -7,7 +7,7 @@
 
 use std::collections::HashMap;
 
-use ath_types::agent::AgentKind;
+use ath_types::agent::AgentId;
 
 /// Builds the static routing table mapping lowercase skill tag strings to agent kinds.
 ///
@@ -15,19 +15,19 @@ use ath_types::agent::AgentKind;
 /// - Claude: deep reasoning tasks (architecture, logic, systems design)
 /// - Gemini: information processing tasks (docs, research, API analysis)
 /// - Codex: mechanical code production tasks (scaffolding, boilerplate, templates)
-pub fn build_routing_table() -> HashMap<String, AgentKind> {
+pub fn build_routing_table() -> HashMap<String, AgentId> {
     let mut table = HashMap::new();
 
     // Claude: architecture and logic tasks
     let claude_tags = ["rust", "architecture", "logic", "systems", "design"];
     for tag in claude_tags {
-        table.insert(tag.to_string(), AgentKind::Claude("opus-4".into()));
+        table.insert(tag.to_string(), AgentId::claude("opus-4"));
     }
 
     // Gemini: documentation and research tasks
     let gemini_tags = ["docs", "research", "api", "documentation", "analysis"];
     for tag in gemini_tags {
-        table.insert(tag.to_string(), AgentKind::Gemini("2.5-pro".into()));
+        table.insert(tag.to_string(), AgentId::gemini("2.5-pro"));
     }
 
     // Codex: code generation and scaffolding tasks
@@ -39,7 +39,7 @@ pub fn build_routing_table() -> HashMap<String, AgentKind> {
         "generation",
     ];
     for tag in codex_tags {
-        table.insert(tag.to_string(), AgentKind::Codex("o3".into()));
+        table.insert(tag.to_string(), AgentId::codex("o3"));
     }
 
     table
@@ -48,19 +48,23 @@ pub fn build_routing_table() -> HashMap<String, AgentKind> {
 /// Returns the priority rank for tiebreaking when multiple agents match.
 ///
 /// Lower is higher priority: Claude(0) > Gemini(1) > Codex(2).
-pub fn priority(agent: &AgentKind) -> u8 {
-    match agent {
-        AgentKind::Claude(_) => 0,
-        AgentKind::Gemini(_) => 1,
-        AgentKind::Codex(_) => 2,
+pub fn priority(agent: &AgentId) -> u8 {
+    if agent.is_claude() {
+        0
+    } else if agent.is_gemini() {
+        1
+    } else if agent.is_codex() {
+        2
+    } else {
+        3 // Custom providers get lowest priority
     }
 }
 
 /// Looks up a skill tag in the routing table (case-insensitive).
 ///
-/// Returns a cloned `AgentKind` if the tag matches, or `None` if unrecognized.
+/// Returns a cloned `AgentId` if the tag matches, or `None` if unrecognized.
 /// The caller is responsible for handling the `None` case (e.g., defaulting to Claude).
-pub fn lookup(tag: &str, table: &HashMap<String, AgentKind>) -> Option<AgentKind> {
+pub fn lookup(tag: &str, table: &HashMap<String, AgentId>) -> Option<AgentId> {
     table.get(&tag.to_lowercase()).cloned()
 }
 
@@ -68,8 +72,8 @@ pub fn lookup(tag: &str, table: &HashMap<String, AgentKind>) -> Option<AgentKind
 ///
 /// Per project decision: unrecognized tags default to Claude as the
 /// strongest general-purpose model.
-pub fn default_agent() -> AgentKind {
-    AgentKind::Claude("opus-4".into())
+pub fn default_agent() -> AgentId {
+    AgentId::claude("opus-4")
 }
 
 #[cfg(test)]
@@ -86,105 +90,93 @@ mod tests {
     #[test]
     fn routing_table_rust_maps_to_claude() {
         let table = build_routing_table();
-        assert!(matches!(table.get("rust"), Some(AgentKind::Claude(_))));
+        assert!(table.get("rust").map_or(false, |a| a.is_claude()));
     }
 
     #[test]
     fn routing_table_architecture_maps_to_claude() {
         let table = build_routing_table();
-        assert!(matches!(
-            table.get("architecture"),
-            Some(AgentKind::Claude(_))
-        ));
+        assert!(table.get("architecture").map_or(false, |a| a.is_claude()));
     }
 
     #[test]
     fn routing_table_logic_maps_to_claude() {
         let table = build_routing_table();
-        assert!(matches!(table.get("logic"), Some(AgentKind::Claude(_))));
+        assert!(table.get("logic").map_or(false, |a| a.is_claude()));
     }
 
     #[test]
     fn routing_table_systems_maps_to_claude() {
         let table = build_routing_table();
-        assert!(matches!(table.get("systems"), Some(AgentKind::Claude(_))));
+        assert!(table.get("systems").map_or(false, |a| a.is_claude()));
     }
 
     #[test]
     fn routing_table_design_maps_to_claude() {
         let table = build_routing_table();
-        assert!(matches!(table.get("design"), Some(AgentKind::Claude(_))));
+        assert!(table.get("design").map_or(false, |a| a.is_claude()));
     }
 
     // Gemini tags
     #[test]
     fn routing_table_docs_maps_to_gemini() {
         let table = build_routing_table();
-        assert!(matches!(table.get("docs"), Some(AgentKind::Gemini(_))));
+        assert!(table.get("docs").map_or(false, |a| a.is_gemini()));
     }
 
     #[test]
     fn routing_table_research_maps_to_gemini() {
         let table = build_routing_table();
-        assert!(matches!(table.get("research"), Some(AgentKind::Gemini(_))));
+        assert!(table.get("research").map_or(false, |a| a.is_gemini()));
     }
 
     #[test]
     fn routing_table_api_maps_to_gemini() {
         let table = build_routing_table();
-        assert!(matches!(table.get("api"), Some(AgentKind::Gemini(_))));
+        assert!(table.get("api").map_or(false, |a| a.is_gemini()));
     }
 
     #[test]
     fn routing_table_documentation_maps_to_gemini() {
         let table = build_routing_table();
-        assert!(matches!(
-            table.get("documentation"),
-            Some(AgentKind::Gemini(_))
-        ));
+        assert!(table.get("documentation").map_or(false, |a| a.is_gemini()));
     }
 
     #[test]
     fn routing_table_analysis_maps_to_gemini() {
         let table = build_routing_table();
-        assert!(matches!(table.get("analysis"), Some(AgentKind::Gemini(_))));
+        assert!(table.get("analysis").map_or(false, |a| a.is_gemini()));
     }
 
     // Codex tags
     #[test]
     fn routing_table_codegen_maps_to_codex() {
         let table = build_routing_table();
-        assert!(matches!(table.get("codegen"), Some(AgentKind::Codex(_))));
+        assert!(table.get("codegen").map_or(false, |a| a.is_codex()));
     }
 
     #[test]
     fn routing_table_boilerplate_maps_to_codex() {
         let table = build_routing_table();
-        assert!(matches!(
-            table.get("boilerplate"),
-            Some(AgentKind::Codex(_))
-        ));
+        assert!(table.get("boilerplate").map_or(false, |a| a.is_codex()));
     }
 
     #[test]
     fn routing_table_scaffolding_maps_to_codex() {
         let table = build_routing_table();
-        assert!(matches!(
-            table.get("scaffolding"),
-            Some(AgentKind::Codex(_))
-        ));
+        assert!(table.get("scaffolding").map_or(false, |a| a.is_codex()));
     }
 
     #[test]
     fn routing_table_template_maps_to_codex() {
         let table = build_routing_table();
-        assert!(matches!(table.get("template"), Some(AgentKind::Codex(_))));
+        assert!(table.get("template").map_or(false, |a| a.is_codex()));
     }
 
     #[test]
     fn routing_table_generation_maps_to_codex() {
         let table = build_routing_table();
-        assert!(matches!(table.get("generation"), Some(AgentKind::Codex(_))));
+        assert!(table.get("generation").map_or(false, |a| a.is_codex()));
     }
 
     // Lookup tests
@@ -192,21 +184,21 @@ mod tests {
     fn lookup_returns_agent_for_known_tag() {
         let table = build_routing_table();
         let result = lookup("rust", &table);
-        assert!(matches!(result, Some(AgentKind::Claude(_))));
+        assert!(result.map_or(false, |a| a.is_claude()));
     }
 
     #[test]
     fn lookup_case_insensitive() {
         let table = build_routing_table();
         let result = lookup("RUST", &table);
-        assert!(matches!(result, Some(AgentKind::Claude(_))));
+        assert!(result.map_or(false, |a| a.is_claude()));
     }
 
     #[test]
     fn lookup_mixed_case() {
         let table = build_routing_table();
         let result = lookup("Research", &table);
-        assert!(matches!(result, Some(AgentKind::Gemini(_))));
+        assert!(result.map_or(false, |a| a.is_gemini()));
     }
 
     #[test]
@@ -219,37 +211,37 @@ mod tests {
     // Priority tests
     #[test]
     fn priority_claude_is_zero() {
-        assert_eq!(priority(&AgentKind::Claude("opus-4".into())), 0);
+        assert_eq!(priority(&AgentId::claude("opus-4")), 0);
     }
 
     #[test]
     fn priority_gemini_is_one() {
-        assert_eq!(priority(&AgentKind::Gemini("2.5-pro".into())), 1);
+        assert_eq!(priority(&AgentId::gemini("2.5-pro")), 1);
     }
 
     #[test]
     fn priority_codex_is_two() {
-        assert_eq!(priority(&AgentKind::Codex("o3".into())), 2);
+        assert_eq!(priority(&AgentId::codex("o3")), 2);
     }
 
     #[test]
     fn priority_ordering_claude_beats_gemini() {
-        let claude_p = priority(&AgentKind::Claude("opus-4".into()));
-        let gemini_p = priority(&AgentKind::Gemini("2.5-pro".into()));
+        let claude_p = priority(&AgentId::claude("opus-4"));
+        let gemini_p = priority(&AgentId::gemini("2.5-pro"));
         assert!(claude_p < gemini_p);
     }
 
     #[test]
     fn priority_ordering_gemini_beats_codex() {
-        let gemini_p = priority(&AgentKind::Gemini("2.5-pro".into()));
-        let codex_p = priority(&AgentKind::Codex("o3".into()));
+        let gemini_p = priority(&AgentId::gemini("2.5-pro"));
+        let codex_p = priority(&AgentId::codex("o3"));
         assert!(gemini_p < codex_p);
     }
 
     // Default agent
     #[test]
     fn default_agent_is_claude() {
-        assert!(matches!(default_agent(), AgentKind::Claude(_)));
+        assert!(default_agent().is_claude());
     }
 
     #[test]

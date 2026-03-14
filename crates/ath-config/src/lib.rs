@@ -10,12 +10,14 @@
 //!
 //! Precedence: CLI flags > env vars > project-local > global config
 
+pub mod agents;
 pub mod env;
 pub mod error;
 pub mod file;
 pub mod store;
 
 // Re-export primary types at crate root for convenience.
+pub use agents::{AgentConfig, AgentsConfig};
 pub use error::ConfigError;
 pub use store::ConfigStore;
 
