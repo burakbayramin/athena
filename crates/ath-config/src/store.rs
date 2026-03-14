@@ -77,6 +77,34 @@ impl ConfigStore {
             )
         };
 
+        // Backfill legacy ConfigStore fields from agents.toml entries.
+        // This ensures that Handle constructors (e.g. GeminiHandle) which check
+        // config.google_api_key find the key even when it comes from a custom
+        // api_key_env like GEMINI_API_KEY. Also syncs model names.
+        for agent in &store.agents.agents {
+            match agent.provider.as_str() {
+                "anthropic" => {
+                    if store.anthropic_api_key.is_none() {
+                        store.anthropic_api_key = agent.resolve_api_key();
+                    }
+                    store.claude_model.clone_from(&agent.model);
+                }
+                "google" => {
+                    if store.google_api_key.is_none() {
+                        store.google_api_key = agent.resolve_api_key();
+                    }
+                    store.gemini_model.clone_from(&agent.model);
+                }
+                "openai" => {
+                    if store.openai_api_key.is_none() {
+                        store.openai_api_key = agent.resolve_api_key();
+                    }
+                    store.codex_model.clone_from(&agent.model);
+                }
+                _ => {}
+            }
+        }
+
         // Load skills config: .ath/skills.toml if it exists
         let skills_path = std::path::Path::new(".ath").join("skills.toml");
         store.skills = if skills_path.exists() {
