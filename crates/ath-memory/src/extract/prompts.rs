@@ -19,12 +19,11 @@ use crate::observe::types::Observation;
     max_count = config.max_observation_count,
     max_bytes = config.max_serialization_bytes
 ))]
-pub fn preprocess_observations(
-    observations: &[Observation],
-    config: &ExtractionConfig,
-) -> String {
+pub fn preprocess_observations(observations: &[Observation], config: &ExtractionConfig) -> String {
     // Take the last N observations (most recent).
-    let start = observations.len().saturating_sub(config.max_observation_count);
+    let start = observations
+        .len()
+        .saturating_sub(config.max_observation_count);
     let truncated = &observations[start..];
 
     // Serialize each observation to a JSON line.
@@ -145,7 +144,7 @@ Respond with a single JSON object. No markdown fencing, no explanation — just 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::observe::types::{ObservationType, Observation};
+    use crate::observe::types::{Observation, ObservationType};
     use ath_types::AgentId;
     use chrono::Utc;
     use uuid::Uuid;
@@ -205,7 +204,10 @@ mod tests {
         // Should have dropped oldest to fit budget
         assert!(lines.len() < 10);
         let total_bytes: usize = result.len();
-        assert!(total_bytes <= 600, "total_bytes={total_bytes} should be <= 600");
+        assert!(
+            total_bytes <= 600,
+            "total_bytes={total_bytes} should be <= 600"
+        );
     }
 
     #[test]

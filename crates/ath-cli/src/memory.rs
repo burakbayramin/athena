@@ -142,7 +142,9 @@ fn cmd_add(memory_dir: &Path, uri_str: &str, content_text: &str) -> Result<()> {
     };
 
     index.add(uri_str, content_text);
-    index.save(&index_path).context("failed to save keyword index")?;
+    index
+        .save(&index_path)
+        .context("failed to save keyword index")?;
 
     println!("Added {uri_str}");
     Ok(())
@@ -196,8 +198,7 @@ fn cmd_gc(memory_dir: &Path, days: u32) -> Result<()> {
         .as_secs()
         .saturating_sub(u64::from(days) * 86400);
 
-    let entries = std::fs::read_dir(&obs_dir)
-        .context("failed to read observations directory")?;
+    let entries = std::fs::read_dir(&obs_dir).context("failed to read observations directory")?;
 
     let mut deleted = 0u32;
     let mut bytes_freed = 0u64;
@@ -270,7 +271,11 @@ fn format_tree(uris: &[VikingUri]) -> String {
     let keys: Vec<&String> = root.keys().collect();
     for (i, key) in keys.iter().enumerate() {
         let is_last_top = i == keys.len() - 1;
-        let connector = if is_last_top { "└── " } else { "├── " };
+        let connector = if is_last_top {
+            "└── "
+        } else {
+            "├── "
+        };
         let children = &root[*key];
         let leaf_count = children.len();
 
@@ -282,7 +287,11 @@ fn format_tree(uris: &[VikingUri]) -> String {
                 continue; // single-segment URI already shown as the directory
             }
             let is_last_child = j == children.len() - 1;
-            let child_connector = if is_last_child { "└── " } else { "├── " };
+            let child_connector = if is_last_child {
+                "└── "
+            } else {
+                "├── "
+            };
             out.push_str(&format!("{indent}{child_connector}{child}\n"));
         }
     }
@@ -291,10 +300,7 @@ fn format_tree(uris: &[VikingUri]) -> String {
 }
 
 /// Format search hits with scores and abstracts.
-fn format_search_results(
-    store: &VikingStore,
-    hits: &[ath_memory::KeywordHit],
-) -> String {
+fn format_search_results(store: &VikingStore, hits: &[ath_memory::KeywordHit]) -> String {
     let mut out = String::new();
     for hit in hits {
         let abstract_text = match VikingUri::from_str(&hit.uri_str) {
@@ -310,7 +316,10 @@ fn format_search_results(
             },
             Err(_) => "(invalid URI)".to_string(),
         };
-        out.push_str(&format!("[{:.2}] {} — {}\n", hit.score, hit.uri_str, abstract_text));
+        out.push_str(&format!(
+            "[{:.2}] {} — {}\n",
+            hit.score, hit.uri_str, abstract_text
+        ));
     }
     out
 }
@@ -319,8 +328,14 @@ fn format_search_results(
 fn format_entry(content: &LayeredContent) -> String {
     let mut out = String::new();
     out.push_str(&format!("URI: {}\n", content.uri));
-    out.push_str(&format!("Created: {}\n", content.created_at.format("%Y-%m-%d %H:%M:%S UTC")));
-    out.push_str(&format!("Updated: {}\n\n", content.updated_at.format("%Y-%m-%d %H:%M:%S UTC")));
+    out.push_str(&format!(
+        "Created: {}\n",
+        content.created_at.format("%Y-%m-%d %H:%M:%S UTC")
+    ));
+    out.push_str(&format!(
+        "Updated: {}\n\n",
+        content.updated_at.format("%Y-%m-%d %H:%M:%S UTC")
+    ));
 
     if !content.abstract_text.is_empty() {
         out.push_str("## Abstract\n\n");
@@ -354,12 +369,7 @@ fn count_jsonl_files(dir: &Path) -> usize {
         .map(|entries| {
             entries
                 .filter_map(|e| e.ok())
-                .filter(|e| {
-                    e.path()
-                        .extension()
-                        .and_then(|ext| ext.to_str())
-                        == Some("jsonl")
-                })
+                .filter(|e| e.path().extension().and_then(|ext| ext.to_str()) == Some("jsonl"))
                 .count()
         })
         .unwrap_or(0)
@@ -388,7 +398,12 @@ fn dir_disk_usage(dir: &Path) -> u64 {
 }
 
 /// Format a stats summary.
-fn format_stats(entries: usize, index_entries: usize, observations: usize, disk_bytes: u64) -> String {
+fn format_stats(
+    entries: usize,
+    index_entries: usize,
+    observations: usize,
+    disk_bytes: u64,
+) -> String {
     format!(
         "Store entries:  {entries}\n\
          Index entries:  {index_entries}\n\
@@ -429,19 +444,28 @@ mod tests {
 
         // Write test entries.
         let entries = vec![
-            ("viking://project/conventions", "Uses hexagonal architecture.", "Detailed overview of conventions."),
-            ("viking://project/identity", "A Rust CLI orchestrator.", "Project identity overview."),
-            ("viking://agents/claude/profile", "Claude prefers explicit errors.", "Agent profile for Claude."),
+            (
+                "viking://project/conventions",
+                "Uses hexagonal architecture.",
+                "Detailed overview of conventions.",
+            ),
+            (
+                "viking://project/identity",
+                "A Rust CLI orchestrator.",
+                "Project identity overview.",
+            ),
+            (
+                "viking://agents/claude/profile",
+                "Claude prefers explicit errors.",
+                "Agent profile for Claude.",
+            ),
         ];
 
         let mut index = KeywordIndex::new();
         for (uri_str, abstract_text, overview_text) in &entries {
             let uri = VikingUri::from_str(uri_str).unwrap();
-            let content = LayeredContent::new(
-                uri,
-                abstract_text.to_string(),
-                overview_text.to_string(),
-            );
+            let content =
+                LayeredContent::new(uri, abstract_text.to_string(), overview_text.to_string());
             store.write(&content).unwrap();
             index.add(uri_str, &format!("{abstract_text} {overview_text}"));
         }
@@ -568,7 +592,12 @@ mod tests {
         let (_dir, memory_dir) = setup_populated_store();
 
         // Add a new entry to the already-populated store/index.
-        cmd_add(&memory_dir, "viking://new/entry", "Brand new content about databases").unwrap();
+        cmd_add(
+            &memory_dir,
+            "viking://new/entry",
+            "Brand new content about databases",
+        )
+        .unwrap();
 
         // Verify the new entry is searchable.
         let index_path = memory_dir.join("index").join("keyword.json");
@@ -642,7 +671,11 @@ mod tests {
         let obs_dir = memory_dir.join("observations");
         std::fs::create_dir_all(&obs_dir).unwrap();
         std::fs::write(obs_dir.join("run-001.jsonl"), "{\"type\":\"obs\"}\n").unwrap();
-        std::fs::write(obs_dir.join("run-002.jsonl"), "{\"type\":\"obs\"}\n{\"type\":\"obs2\"}\n").unwrap();
+        std::fs::write(
+            obs_dir.join("run-002.jsonl"),
+            "{\"type\":\"obs\"}\n{\"type\":\"obs2\"}\n",
+        )
+        .unwrap();
 
         (dir, memory_dir)
     }
@@ -652,10 +685,22 @@ mod tests {
         let (_dir, memory_dir) = setup_full_memory_dir();
         let output = capture_stats(&memory_dir);
 
-        assert!(output.contains("Store entries:  3"), "expected 3 store entries, got: {output}");
-        assert!(output.contains("Index entries:  3"), "expected 3 index entries, got: {output}");
-        assert!(output.contains("Observations:   2"), "expected 2 observations, got: {output}");
-        assert!(output.contains("Disk usage:"), "expected disk usage line, got: {output}");
+        assert!(
+            output.contains("Store entries:  3"),
+            "expected 3 store entries, got: {output}"
+        );
+        assert!(
+            output.contains("Index entries:  3"),
+            "expected 3 index entries, got: {output}"
+        );
+        assert!(
+            output.contains("Observations:   2"),
+            "expected 2 observations, got: {output}"
+        );
+        assert!(
+            output.contains("Disk usage:"),
+            "expected disk usage line, got: {output}"
+        );
     }
 
     #[test]
@@ -693,7 +738,9 @@ mod tests {
 
         let index_path = memory_dir.join("index").join("keyword.json");
         let index_entries = if index_path.exists() {
-            KeywordIndex::load(&index_path).map(|i| i.len()).unwrap_or(0)
+            KeywordIndex::load(&index_path)
+                .map(|i| i.len())
+                .unwrap_or(0)
         } else {
             0
         };

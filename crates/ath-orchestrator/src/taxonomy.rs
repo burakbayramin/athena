@@ -118,93 +118,93 @@ mod tests {
     #[test]
     fn routing_table_rust_maps_to_claude() {
         let table = build_routing_table();
-        assert!(table.get("rust").map_or(false, |a| a.is_claude()));
+        assert!(table.get("rust").is_some_and(|a| a.is_claude()));
     }
 
     #[test]
     fn routing_table_architecture_maps_to_claude() {
         let table = build_routing_table();
-        assert!(table.get("architecture").map_or(false, |a| a.is_claude()));
+        assert!(table.get("architecture").is_some_and(|a| a.is_claude()));
     }
 
     #[test]
     fn routing_table_logic_maps_to_claude() {
         let table = build_routing_table();
-        assert!(table.get("logic").map_or(false, |a| a.is_claude()));
+        assert!(table.get("logic").is_some_and(|a| a.is_claude()));
     }
 
     #[test]
     fn routing_table_systems_maps_to_claude() {
         let table = build_routing_table();
-        assert!(table.get("systems").map_or(false, |a| a.is_claude()));
+        assert!(table.get("systems").is_some_and(|a| a.is_claude()));
     }
 
     #[test]
     fn routing_table_design_maps_to_claude() {
         let table = build_routing_table();
-        assert!(table.get("design").map_or(false, |a| a.is_claude()));
+        assert!(table.get("design").is_some_and(|a| a.is_claude()));
     }
 
     // Gemini tags
     #[test]
     fn routing_table_docs_maps_to_gemini() {
         let table = build_routing_table();
-        assert!(table.get("docs").map_or(false, |a| a.is_gemini()));
+        assert!(table.get("docs").is_some_and(|a| a.is_gemini()));
     }
 
     #[test]
     fn routing_table_research_maps_to_gemini() {
         let table = build_routing_table();
-        assert!(table.get("research").map_or(false, |a| a.is_gemini()));
+        assert!(table.get("research").is_some_and(|a| a.is_gemini()));
     }
 
     #[test]
     fn routing_table_api_maps_to_gemini() {
         let table = build_routing_table();
-        assert!(table.get("api").map_or(false, |a| a.is_gemini()));
+        assert!(table.get("api").is_some_and(|a| a.is_gemini()));
     }
 
     #[test]
     fn routing_table_documentation_maps_to_gemini() {
         let table = build_routing_table();
-        assert!(table.get("documentation").map_or(false, |a| a.is_gemini()));
+        assert!(table.get("documentation").is_some_and(|a| a.is_gemini()));
     }
 
     #[test]
     fn routing_table_analysis_maps_to_gemini() {
         let table = build_routing_table();
-        assert!(table.get("analysis").map_or(false, |a| a.is_gemini()));
+        assert!(table.get("analysis").is_some_and(|a| a.is_gemini()));
     }
 
     // Codex tags
     #[test]
     fn routing_table_codegen_maps_to_codex() {
         let table = build_routing_table();
-        assert!(table.get("codegen").map_or(false, |a| a.is_codex()));
+        assert!(table.get("codegen").is_some_and(|a| a.is_codex()));
     }
 
     #[test]
     fn routing_table_boilerplate_maps_to_codex() {
         let table = build_routing_table();
-        assert!(table.get("boilerplate").map_or(false, |a| a.is_codex()));
+        assert!(table.get("boilerplate").is_some_and(|a| a.is_codex()));
     }
 
     #[test]
     fn routing_table_scaffolding_maps_to_codex() {
         let table = build_routing_table();
-        assert!(table.get("scaffolding").map_or(false, |a| a.is_codex()));
+        assert!(table.get("scaffolding").is_some_and(|a| a.is_codex()));
     }
 
     #[test]
     fn routing_table_template_maps_to_codex() {
         let table = build_routing_table();
-        assert!(table.get("template").map_or(false, |a| a.is_codex()));
+        assert!(table.get("template").is_some_and(|a| a.is_codex()));
     }
 
     #[test]
     fn routing_table_generation_maps_to_codex() {
         let table = build_routing_table();
-        assert!(table.get("generation").map_or(false, |a| a.is_codex()));
+        assert!(table.get("generation").is_some_and(|a| a.is_codex()));
     }
 
     // Lookup tests
@@ -212,21 +212,21 @@ mod tests {
     fn lookup_returns_agent_for_known_tag() {
         let table = build_routing_table();
         let result = lookup("rust", &table);
-        assert!(result.map_or(false, |a| a.is_claude()));
+        assert!(result.is_some_and(|a| a.is_claude()));
     }
 
     #[test]
     fn lookup_case_insensitive() {
         let table = build_routing_table();
         let result = lookup("RUST", &table);
-        assert!(result.map_or(false, |a| a.is_claude()));
+        assert!(result.is_some_and(|a| a.is_claude()));
     }
 
     #[test]
     fn lookup_mixed_case() {
         let table = build_routing_table();
         let result = lookup("Research", &table);
-        assert!(result.map_or(false, |a| a.is_gemini()));
+        assert!(result.is_some_and(|a| a.is_gemini()));
     }
 
     #[test]
@@ -283,10 +283,13 @@ mod tests {
     fn config_overrides_existing_route() {
         use ath_config::skills::{AgentRef, SkillsConfig};
         let mut routes = std::collections::HashMap::new();
-        routes.insert("rust".to_string(), AgentRef {
-            provider: "ollama".to_string(),
-            model: "codestral".to_string(),
-        });
+        routes.insert(
+            "rust".to_string(),
+            AgentRef {
+                provider: "ollama".to_string(),
+                model: "codestral".to_string(),
+            },
+        );
         let config = SkillsConfig {
             default: None,
             routes,
@@ -301,10 +304,13 @@ mod tests {
     fn config_adds_new_route() {
         use ath_config::skills::{AgentRef, SkillsConfig};
         let mut routes = std::collections::HashMap::new();
-        routes.insert("python".to_string(), AgentRef {
-            provider: "ollama".to_string(),
-            model: "llama3.3".to_string(),
-        });
+        routes.insert(
+            "python".to_string(),
+            AgentRef {
+                provider: "ollama".to_string(),
+                model: "llama3.3".to_string(),
+            },
+        );
         let config = SkillsConfig {
             default: None,
             routes,

@@ -63,9 +63,7 @@ impl Checkpoint {
     /// Check if an entire parallel group should be skipped.
     /// Returns true only if ALL phase IDs in the group have completed records.
     pub fn should_skip_group(&self, group: &[u32]) -> bool {
-        group
-            .iter()
-            .all(|id| self.completed_phase_ids.contains(id))
+        group.iter().all(|id| self.completed_phase_ids.contains(id))
     }
 
     /// Check if this checkpoint is stale (plan has changed since checkpoint was created).
@@ -104,11 +102,12 @@ impl CheckpointStore {
             })?;
         }
 
-        let json =
-            serde_json::to_string_pretty(checkpoint).map_err(|e| PhaseRunnerError::AtomicWriteFailed {
+        let json = serde_json::to_string_pretty(checkpoint).map_err(|e| {
+            PhaseRunnerError::AtomicWriteFailed {
                 path: path.display().to_string(),
                 reason: format!("failed to serialize checkpoint: {e}"),
-            })?;
+            }
+        })?;
 
         let temp_path = path.with_extension("tmp");
 
@@ -436,7 +435,11 @@ mod tests {
     #[test]
     fn save_creates_parent_directories() {
         let temp = tempfile::tempdir().unwrap();
-        let path = temp.path().join("deep").join("nested").join("checkpoint.json");
+        let path = temp
+            .path()
+            .join("deep")
+            .join("nested")
+            .join("checkpoint.json");
         let plan = make_plan("test");
         let cp = Checkpoint::new("run-1".into(), &plan);
 

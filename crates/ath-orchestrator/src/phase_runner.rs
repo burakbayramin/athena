@@ -12,7 +12,7 @@ use std::marker::PhantomData;
 use std::sync::Arc;
 
 use ath_agents::AgentBackend;
-use ath_types::agent::{AgentId, AgentRequest, AgentResponse, ChatMessage};
+use ath_types::agent::{AgentId, AgentRequest, AgentResponse};
 use ath_types::conversation::ConversationBuilder;
 use ath_types::plan::PhaseSpec;
 use ath_types::review::ReviewVerdict;
@@ -552,12 +552,7 @@ pub async fn execute_phase_tasks_with_progress(
             created_at: chrono::Utc::now(),
         };
 
-        let chunk_cb = make_chunk_callback(
-            observer.as_ref(),
-            phase.id,
-            &phase.name,
-            agent,
-        );
+        let chunk_cb = make_chunk_callback(observer.as_ref(), phase.id, &phase.name, agent);
 
         let response: AgentResponse =
             backend
@@ -589,9 +584,7 @@ pub async fn execute_phase_tasks_with_progress(
         task_output.output_tokens = response.output_tokens;
 
         // Record this turn in conversation history for multi-turn retry
-        let conv = conversations
-            .entry(task.name.clone())
-            .or_insert_with(ConversationBuilder::default);
+        let conv = conversations.entry(task.name.clone()).or_default();
         conv.push_user(&prompt);
         conv.push_assistant(&response.content);
 
@@ -768,12 +761,8 @@ pub async fn run_phase_with_progress(
             },
         );
 
-        let review_chunk_cb = make_chunk_callback(
-            observer.as_ref(),
-            phase.id,
-            &phase.name,
-            &reviewer,
-        );
+        let review_chunk_cb =
+            make_chunk_callback(observer.as_ref(), phase.id, &phase.name, &reviewer);
 
         let review_response = reviewer_backend
             .send_streaming(review_request, review_chunk_cb)

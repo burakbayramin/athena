@@ -49,7 +49,7 @@ fn config_no_keys() -> ConfigStore {
         gemini_model: "2.5-pro".into(),
         codex_model: "o3".into(),
         agents: ath_config::AgentsConfig::default(),
-            skills: None,
+        skills: None,
     }
 }
 
@@ -129,9 +129,7 @@ async fn mock_failing_returns_expected_error() {
         duration: Duration::from_secs(300),
     });
 
-    let result = backend
-        .send(make_request(AgentId::claude("opus-4")))
-        .await;
+    let result = backend.send(make_request(AgentId::claude("opus-4"))).await;
     assert!(result.is_err());
     let err = result.unwrap_err();
     assert!(

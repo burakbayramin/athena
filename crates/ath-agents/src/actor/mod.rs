@@ -199,10 +199,21 @@ pub async fn call_provider(
     json_schema: Option<&serde_json::Value>,
     provider: &str,
 ) -> Result<(String, u64, u64), AgentError> {
-    call_provider_streaming(client, model, prompt, context, json_schema, provider, None, &[]).await
+    call_provider_streaming(
+        client,
+        model,
+        prompt,
+        context,
+        json_schema,
+        provider,
+        None,
+        &[],
+    )
+    .await
 }
 
 /// Call a provider with optional streaming chunk callback and conversation history.
+#[allow(clippy::too_many_arguments)]
 pub async fn call_provider_streaming(
     client: &genai::Client,
     model: &str,

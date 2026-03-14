@@ -33,7 +33,7 @@ pub struct AgentRef {
 }
 
 /// Skills routing configuration.
-#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Default, Deserialize)]
 pub struct SkillsConfig {
     /// Default agent for unrecognized skill tags. If absent, uses hardcoded default.
     #[serde(default)]
@@ -43,22 +43,12 @@ pub struct SkillsConfig {
     pub routes: HashMap<String, AgentRef>,
 }
 
-impl Default for SkillsConfig {
-    fn default() -> Self {
-        Self {
-            default: None,
-            routes: HashMap::new(),
-        }
-    }
-}
-
 impl SkillsConfig {
     /// Load skills config from a TOML file.
     pub fn load(path: &Path) -> Result<Self, ConfigError> {
-        let content =
-            std::fs::read_to_string(path).map_err(|_| ConfigError::FileNotFound {
-                path: path.display().to_string(),
-            })?;
+        let content = std::fs::read_to_string(path).map_err(|_| ConfigError::FileNotFound {
+            path: path.display().to_string(),
+        })?;
         Self::parse(&content)
     }
 

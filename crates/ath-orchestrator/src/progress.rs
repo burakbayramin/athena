@@ -550,7 +550,10 @@ mod tests {
     fn make_chunk_callback_returns_none_for_non_verbose_observer() {
         let observer: SharedProgressObserver = Arc::new(RecordingObserver::default());
         let cb = make_chunk_callback(Some(&observer), 1, "phase-1", &AgentId::claude("opus-4"));
-        assert!(cb.is_none(), "non-verbose observer should not get chunk callback");
+        assert!(
+            cb.is_none(),
+            "non-verbose observer should not get chunk callback"
+        );
     }
 
     #[test]
@@ -571,7 +574,8 @@ mod tests {
         let recorder = Arc::new(VerboseRecorder::default());
         let observer: SharedProgressObserver = recorder.clone();
         let agent = AgentId::claude("opus-4");
-        let cb = make_chunk_callback(Some(&observer), 1, "phase-1", &agent).expect("should return callback");
+        let cb = make_chunk_callback(Some(&observer), 1, "phase-1", &agent)
+            .expect("should return callback");
 
         cb("Hello ");
         cb("world!");
@@ -646,8 +650,14 @@ mod tests {
             2,
             "should have user+assistant pair from first attempt"
         );
-        assert_eq!(requests[1].messages[0].role, ath_types::agent::ChatRole::User);
-        assert_eq!(requests[1].messages[1].role, ath_types::agent::ChatRole::Assistant);
+        assert_eq!(
+            requests[1].messages[0].role,
+            ath_types::agent::ChatRole::User
+        );
+        assert_eq!(
+            requests[1].messages[1].role,
+            ath_types::agent::ChatRole::Assistant
+        );
     }
 }
 

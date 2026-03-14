@@ -2,7 +2,9 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use anyhow::{anyhow, Result};
-use ath_agents::{AgentBackend, ClaudeHandle, CodexHandle, GeminiHandle, GenericHandle, GenericHandleConfig};
+use ath_agents::{
+    AgentBackend, ClaudeHandle, CodexHandle, GeminiHandle, GenericHandle, GenericHandleConfig,
+};
 use ath_config::ConfigStore;
 use ath_orchestrator::coordinator::AgentCoordinator;
 use ath_orchestrator::isolation::check_isolation;
@@ -63,9 +65,16 @@ fn show_checkpoint_status(project_dir: &Path) -> Result<()> {
             println!("Checkpoint found: {}", cp_path.display());
             println!("  Run ID:         {}", cp.run_id);
             println!("  Plan fingerprint: {}", &cp.plan_fingerprint[..16]);
-            println!("  Completed:      {}/{} phases", cp.completed_count(), cp.plan.execution_order.len());
+            println!(
+                "  Completed:      {}/{} phases",
+                cp.completed_count(),
+                cp.plan.execution_order.len()
+            );
             if !cp.completed_phase_ids.is_empty() {
-                let mut phase_names: Vec<_> = cp.plan.phases.iter()
+                let mut phase_names: Vec<_> = cp
+                    .plan
+                    .phases
+                    .iter()
                     .filter(|p| cp.completed_phase_ids.contains(&p.id))
                     .map(|p| format!("    - {} (phase {})", p.name, p.id))
                     .collect();
@@ -75,8 +84,14 @@ fn show_checkpoint_status(project_dir: &Path) -> Result<()> {
                     println!("{name}");
                 }
             }
-            println!("  Started at:     {}", cp.started_at.format("%Y-%m-%d %H:%M:%S UTC"));
-            println!("  Updated at:     {}", cp.updated_at.format("%Y-%m-%d %H:%M:%S UTC"));
+            println!(
+                "  Started at:     {}",
+                cp.started_at.format("%Y-%m-%d %H:%M:%S UTC")
+            );
+            println!(
+                "  Updated at:     {}",
+                cp.updated_at.format("%Y-%m-%d %H:%M:%S UTC")
+            );
             println!("\nRun `ath run` to resume, or `ath run --fresh` to start over.");
             Ok(())
         }
@@ -104,11 +119,9 @@ pub(crate) async fn run_command(args: RunArgs, global: GlobalArgs) -> Result<()>
     let cp_path = checkpoint_path(&project_dir);
 
     // --fresh: delete any existing checkpoint before proceeding
-    if args.fresh {
-        if cp_path.exists() {
-            std::fs::remove_file(&cp_path).map_err(|e| anyhow!("Failed to remove checkpoint: {e}"))?;
-            println!("Checkpoint cleared. Starting fresh run.");
-        }
+    if args.fresh && cp_path.exists() {
+        std::fs::remove_file(&cp_path).map_err(|e| anyhow!("Failed to remove checkpoint: {e}"))?;
+        println!("Checkpoint cleared. Starting fresh run.");
     }
 
     let config = ConfigStore::load().map_err(anyhow::Error::new)?;
@@ -205,12 +218,19 @@ fn build_agent_registry(config: &ConfigStore) -> Result<AgentRegistry> {
         }
     }
 
-    if !config.agents.agents.iter().any(|a| {
-        a.resolve_api_key().is_some() && a.is_builtin_provider()
-    }) && registry.get(&AgentId::new("any", "placeholder")).is_none()
+    if !config
+        .agents
+        .agents
+        .iter()
+        .any(|a| a.resolve_api_key().is_some() && a.is_builtin_provider())
+        && registry.get(&AgentId::new("any", "placeholder")).is_none()
     {
         // Check if we got at least one provider registered
-        let has_any = config.agents.agents.iter().any(|a| a.resolve_api_key().is_some());
+        let has_any = config
+            .agents
+            .agents
+            .iter()
+            .any(|a| a.resolve_api_key().is_some());
         if !has_any {
             anyhow::bail!("No execution providers are available. Configure at least one provider.");
         }
@@ -366,8 +386,14 @@ mod tests {
 
         assign_agents_and_check_isolation(&mut plan, |_| true).expect("routing succeeds");
 
-        assert!(plan.phases[0].tasks[0].assigned_agent.as_ref().map_or(false, |a| a.is_claude()));
-        assert!(plan.phases[0].tasks[1].assigned_agent.as_ref().map_or(false, |a| a.is_gemini()));
+        assert!(plan.phases[0].tasks[0]
+            .assigned_agent
+            .as_ref()
+            .is_some_and(|a| a.is_claude()));
+        assert!(plan.phases[0].tasks[1]
+            .assigned_agent
+            .as_ref()
+            .is_some_and(|a| a.is_gemini()));
     }
 
     #[test]

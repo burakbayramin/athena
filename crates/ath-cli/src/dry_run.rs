@@ -128,6 +128,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[allow(clippy::await_holding_lock)]
     async fn dry_run_uses_cached_plan_without_constructing_backends() {
         let _guard = CURRENT_DIR_LOCK.lock().unwrap();
         let temp = tempfile::tempdir().unwrap();
@@ -162,6 +163,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[allow(clippy::await_holding_lock)]
     async fn dry_run_missing_cache_fails_before_constructing_backends() {
         let _guard = CURRENT_DIR_LOCK.lock().unwrap();
         let temp = tempfile::tempdir().unwrap();

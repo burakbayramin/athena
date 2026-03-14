@@ -194,7 +194,7 @@ mod tests {
             MemoryError::IoError {
                 path: "x".into(),
                 message: "y".into(),
-                source: std::io::Error::new(std::io::ErrorKind::Other, "z"),
+                source: std::io::Error::other("z"),
             },
             MemoryError::SerializationError {
                 message: "x".into(),

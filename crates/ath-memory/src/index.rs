@@ -231,11 +231,10 @@ impl MemoryIndex {
             vectors: &self.vectors,
         };
         let index_path = dir.join("index.json");
-        let json =
-            serde_json::to_string(&data).map_err(|e| MemoryError::SerializationError {
-                message: format!("failed to serialize index: {}", e),
-                source: Some(e),
-            })?;
+        let json = serde_json::to_string(&data).map_err(|e| MemoryError::SerializationError {
+            message: format!("failed to serialize index: {}", e),
+            source: Some(e),
+        })?;
         std::fs::write(&index_path, &json).map_err(|e| MemoryError::IoError {
             path: index_path.display().to_string(),
             message: "failed to write index.json".to_string(),
@@ -293,12 +292,11 @@ impl MemoryIndex {
 
         // Load vectors.
         let index_path = dir.join("index.json");
-        let index_raw =
-            std::fs::read_to_string(&index_path).map_err(|e| MemoryError::IoError {
-                path: index_path.display().to_string(),
-                message: "failed to read index.json".to_string(),
-                source: e,
-            })?;
+        let index_raw = std::fs::read_to_string(&index_path).map_err(|e| MemoryError::IoError {
+            path: index_path.display().to_string(),
+            message: "failed to read index.json".to_string(),
+            source: e,
+        })?;
         let data: IndexDataOwned =
             serde_json::from_str(&index_raw).map_err(|e| MemoryError::SerializationError {
                 message: format!("failed to parse index.json: {}", e),
@@ -502,12 +500,8 @@ mod tests {
         let dim = 4;
         let mut index = MemoryIndex::new(dim, 100);
 
-        index
-            .upsert("viking://a", &[1.0, 0.0, 0.0, 0.0])
-            .unwrap();
-        index
-            .upsert("viking://b", &[0.0, 1.0, 0.0, 0.0])
-            .unwrap();
+        index.upsert("viking://a", &[1.0, 0.0, 0.0, 0.0]).unwrap();
+        index.upsert("viking://b", &[0.0, 1.0, 0.0, 0.0]).unwrap();
 
         // Verify both are searchable.
         let results = index.search(&[1.0, 0.0, 0.0, 0.0], 5).unwrap();
@@ -633,11 +627,8 @@ mod tests {
 
         for (uri_str, abstract_text, overview_text, vector) in &entries {
             let uri: VikingUri = uri_str.parse().unwrap();
-            let content = LayeredContent::new(
-                uri,
-                abstract_text.to_string(),
-                overview_text.to_string(),
-            );
+            let content =
+                LayeredContent::new(uri, abstract_text.to_string(), overview_text.to_string());
             store.write(&content).unwrap();
             vector_index.upsert(uri_str, vector).unwrap();
 

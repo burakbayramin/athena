@@ -177,8 +177,7 @@ impl<'de> Deserialize<'de> for AgentId {
                     }
                 }
 
-                let provider =
-                    provider.ok_or_else(|| de::Error::missing_field("provider"))?;
+                let provider = provider.ok_or_else(|| de::Error::missing_field("provider"))?;
                 let model = model.ok_or_else(|| de::Error::missing_field("model"))?;
 
                 Ok(AgentId::new(provider, model))

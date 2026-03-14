@@ -350,10 +350,7 @@ mod tests {
     // Test 4: Tie (1 Claude, 1 Gemini) excludes Claude (higher priority = majority tiebreak), selects Gemini
     #[test]
     fn tie_excludes_higher_priority_selects_next() {
-        let agents = vec![
-            AgentId::claude("opus-4"),
-            AgentId::gemini("2.5-pro"),
-        ];
+        let agents = vec![AgentId::claude("opus-4"), AgentId::gemini("2.5-pro")];
         let reviewer = select_reviewer(&agents, "test-phase", always_available).unwrap();
         assert!(reviewer.is_gemini());
     }
@@ -362,12 +359,8 @@ mod tests {
     #[test]
     fn fallback_when_preferred_unavailable() {
         let agents = vec![AgentId::gemini("2.5-pro")];
-        let reviewer = select_reviewer(
-            &agents,
-            "test-phase",
-            exclude(|| AgentId::claude("")),
-        )
-        .unwrap();
+        let reviewer =
+            select_reviewer(&agents, "test-phase", exclude(|| AgentId::claude(""))).unwrap();
         assert!(reviewer.is_codex());
     }
 
@@ -387,12 +380,8 @@ mod tests {
     #[test]
     fn codex_only_claude_unavailable_selects_gemini() {
         let agents = vec![AgentId::codex("o3")];
-        let reviewer = select_reviewer(
-            &agents,
-            "test-phase",
-            exclude(|| AgentId::claude("")),
-        )
-        .unwrap();
+        let reviewer =
+            select_reviewer(&agents, "test-phase", exclude(|| AgentId::claude(""))).unwrap();
         assert!(reviewer.is_gemini());
     }
 

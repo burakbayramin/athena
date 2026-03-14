@@ -146,7 +146,7 @@ impl VikingStore {
     pub fn list(&self) -> Result<Vec<VikingUri>, MemoryError> {
         let mut uris = Vec::new();
         self.walk_dir(&self.root, &mut uris)?;
-        uris.sort_by(|a, b| a.to_string().cmp(&b.to_string()));
+        uris.sort_by_key(|uri| uri.to_string());
         tracing::debug!(count = uris.len(), "listed store entries");
         Ok(uris)
     }
@@ -184,7 +184,7 @@ impl VikingStore {
                 if path
                     .file_name()
                     .and_then(|n| n.to_str())
-                    .map_or(false, |n| n.ends_with(".md.tmp"))
+                    .is_some_and(|n| n.ends_with(".md.tmp"))
                 {
                     continue;
                 }
@@ -224,8 +224,14 @@ fn serialize_content(content: &LayeredContent) -> String {
     // YAML frontmatter
     out.push_str("---\n");
     out.push_str(&format!("uri: {}\n", content.uri));
-    out.push_str(&format!("created_at: {}\n", content.created_at.to_rfc3339()));
-    out.push_str(&format!("updated_at: {}\n", content.updated_at.to_rfc3339()));
+    out.push_str(&format!(
+        "created_at: {}\n",
+        content.created_at.to_rfc3339()
+    ));
+    out.push_str(&format!(
+        "updated_at: {}\n",
+        content.updated_at.to_rfc3339()
+    ));
     out.push_str("---\n\n");
 
     // L0: Abstract
@@ -283,14 +289,8 @@ fn deserialize_content(raw: &str, uri: &VikingUri) -> Result<LayeredContent, Mem
 
     let sections = parse_sections(&body);
 
-    let abstract_text = sections
-        .get("abstract")
-        .cloned()
-        .unwrap_or_default();
-    let overview_text = sections
-        .get("overview")
-        .cloned()
-        .unwrap_or_default();
+    let abstract_text = sections.get("abstract").cloned().unwrap_or_default();
+    let overview_text = sections.get("overview").cloned().unwrap_or_default();
     let detail = sections.get("detail").cloned();
 
     Ok(LayeredContent {
@@ -306,7 +306,9 @@ fn deserialize_content(raw: &str, uri: &VikingUri) -> Result<LayeredContent, Mem
 /// Parse YAML-style frontmatter between `---` fences.
 ///
 /// Returns (key-value map, remaining body text).
-fn parse_frontmatter(raw: &str) -> Result<(std::collections::HashMap<String, String>, String), MemoryError> {
+fn parse_frontmatter(
+    raw: &str,
+) -> Result<(std::collections::HashMap<String, String>, String), MemoryError> {
     let trimmed = raw.trim_start();
 
     if !trimmed.starts_with("---") {
@@ -318,7 +320,9 @@ fn parse_frontmatter(raw: &str) -> Result<(std::collections::HashMap<String, Str
 
     // Find the closing ---
     let after_open = &trimmed[3..].trim_start_matches(['\r', '\n']);
-    let close_pos = after_open.find("\n---").or_else(|| after_open.find("\r\n---"));
+    let close_pos = after_open
+        .find("\n---")
+        .or_else(|| after_open.find("\r\n---"));
 
     let (fm_text, body) = match close_pos {
         Some(pos) => {
@@ -355,10 +359,7 @@ fn parse_frontmatter(raw: &str) -> Result<(std::collections::HashMap<String, Str
 }
 
 /// Parse a timestamp string from frontmatter.
-fn parse_timestamp(
-    value: Option<&String>,
-    field_name: &str,
-) -> Result<DateTime<Utc>, MemoryError> {
+fn parse_timestamp(value: Option<&String>, field_name: &str) -> Result<DateTime<Utc>, MemoryError> {
     let s = value.ok_or_else(|| MemoryError::SerializationError {
         message: format!("missing '{field_name}' in frontmatter"),
         source: None,
@@ -379,10 +380,7 @@ const KNOWN_SECTIONS: &[&str] = &["abstract", "overview", "detail"];
 fn is_store_heading(line: &str) -> Option<&'static str> {
     if let Some(heading) = line.strip_prefix("## ") {
         let lower = heading.trim().to_lowercase();
-        KNOWN_SECTIONS
-            .iter()
-            .find(|&&s| s == lower)
-            .copied()
+        KNOWN_SECTIONS.iter().find(|&&s| s == lower).copied()
     } else {
         None
     }
@@ -435,10 +433,11 @@ mod tests {
         LayeredContent::new(
             uri,
             "Project follows hexagonal architecture.".to_string(),
-            "## Conventions\n- Hexagonal architecture\n- Error types use hint() method"
-                .to_string(),
+            "## Conventions\n- Hexagonal architecture\n- Error types use hint() method".to_string(),
         )
-        .with_detail("Full detail about project conventions including examples and rationale.".to_string())
+        .with_detail(
+            "Full detail about project conventions including examples and rationale.".to_string(),
+        )
     }
 
     fn sample_content_no_detail() -> LayeredContent {

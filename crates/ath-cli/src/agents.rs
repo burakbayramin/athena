@@ -38,8 +38,7 @@ fn list_agents(config: &ConfigStore, _global: GlobalArgs) -> Result<()> {
         println!("No agents configured.");
         println!(
             "{}",
-            "Add agents to .ath/agents.toml or set API key environment variables."
-                .dimmed()
+            "Add agents to .ath/agents.toml or set API key environment variables.".dimmed()
         );
         return Ok(());
     }
@@ -59,11 +58,7 @@ fn list_agents(config: &ConfigStore, _global: GlobalArgs) -> Result<()> {
         let provider_model = format!("{}/{}", agent.provider, agent.model);
 
         if agent.display_name.is_some() {
-            println!(
-                "  {} ({})",
-                name.bold(),
-                provider_model.dimmed()
-            );
+            println!("  {} ({})", name.bold(), provider_model.dimmed());
         } else {
             println!("  {}", provider_model.bold());
         }
@@ -83,7 +78,10 @@ fn list_agents(config: &ConfigStore, _global: GlobalArgs) -> Result<()> {
         println!();
     }
 
-    let available = agents.iter().filter(|a| a.resolve_api_key().is_some()).count();
+    let available = agents
+        .iter()
+        .filter(|a| a.resolve_api_key().is_some())
+        .count();
     println!(
         "{} agent(s) configured, {} available",
         agents.len(),
@@ -117,7 +115,10 @@ fn test_agents(config: &ConfigStore, _global: GlobalArgs) -> Result<()> {
         return Ok(());
     }
 
-    let available: Vec<_> = agents.iter().filter(|a| a.resolve_api_key().is_some()).collect();
+    let available: Vec<_> = agents
+        .iter()
+        .filter(|a| a.resolve_api_key().is_some())
+        .collect();
 
     if available.is_empty() {
         println!("No agents have API keys configured. Nothing to test.");

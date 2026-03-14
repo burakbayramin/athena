@@ -87,19 +87,11 @@ impl AgentConfig {
 /// base_url = "http://localhost:11434"
 /// display_name = "Local Llama"
 /// ```
-#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Default, Deserialize)]
 pub struct AgentsConfig {
     /// Agent definitions.
     #[serde(default)]
     pub agents: Vec<AgentConfig>,
-}
-
-impl Default for AgentsConfig {
-    fn default() -> Self {
-        Self {
-            agents: Vec::new(),
-        }
-    }
 }
 
 impl AgentsConfig {
@@ -109,10 +101,9 @@ impl AgentsConfig {
     /// Does NOT fall back to defaults — caller should use `default_agents_from_env()`
     /// when file is not found.
     pub fn load(path: &Path) -> Result<Self, ConfigError> {
-        let content =
-            std::fs::read_to_string(path).map_err(|_| ConfigError::FileNotFound {
-                path: path.display().to_string(),
-            })?;
+        let content = std::fs::read_to_string(path).map_err(|_| ConfigError::FileNotFound {
+            path: path.display().to_string(),
+        })?;
         Self::parse(&content)
     }
 
@@ -154,10 +145,7 @@ impl AgentsConfig {
             if !seen.insert(key) {
                 return Err(ConfigError::InvalidAgentConfig {
                     index: i,
-                    reason: format!(
-                        "duplicate agent: {}/{}",
-                        agent.provider, agent.model
-                    ),
+                    reason: format!("duplicate agent: {}/{}", agent.provider, agent.model),
                 });
             }
         }
@@ -327,8 +315,14 @@ display_name = "Local Llama"
         let config = AgentsConfig::parse(toml).unwrap();
         assert_eq!(config.agents.len(), 1);
         assert_eq!(config.agents[0].provider, "ollama");
-        assert_eq!(config.agents[0].base_url.as_deref(), Some("http://localhost:11434"));
-        assert_eq!(config.agents[0].display_name.as_deref(), Some("Local Llama"));
+        assert_eq!(
+            config.agents[0].base_url.as_deref(),
+            Some("http://localhost:11434")
+        );
+        assert_eq!(
+            config.agents[0].display_name.as_deref(),
+            Some("Local Llama")
+        );
     }
 
     #[test]
@@ -516,14 +510,8 @@ api_key_env = "ANTHROPIC_API_KEY"
 
     #[test]
     fn default_agents_from_config_partial() {
-        let config = default_agents_from_config(
-            Some("key1"),
-            None,
-            None,
-            "sonnet-4",
-            "2.5-pro",
-            "o3",
-        );
+        let config =
+            default_agents_from_config(Some("key1"), None, None, "sonnet-4", "2.5-pro", "o3");
         assert_eq!(config.agents.len(), 1);
         assert_eq!(config.agents[0].provider, "anthropic");
         assert_eq!(config.agents[0].model, "sonnet-4");

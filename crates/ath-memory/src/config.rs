@@ -14,7 +14,7 @@ use crate::inject::InjectionConfig;
 /// Top-level memory configuration, loaded from `.ath/memory/config.toml`.
 ///
 /// All sections are optional and default independently.
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Default, Deserialize)]
 #[serde(default)]
 pub struct MemoryConfig {
     /// Context injection budget settings.
@@ -23,16 +23,6 @@ pub struct MemoryConfig {
     pub extraction: ExtractionConfig,
     /// Garbage collection settings.
     pub gc: GcConfig,
-}
-
-impl Default for MemoryConfig {
-    fn default() -> Self {
-        Self {
-            injection: InjectionConfig::default(),
-            extraction: ExtractionConfig::default(),
-            gc: GcConfig::default(),
-        }
-    }
 }
 
 impl MemoryConfig {

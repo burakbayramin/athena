@@ -118,9 +118,6 @@ mod tests {
         let json = serde_json::to_string(&hit).unwrap();
         let deserialized: MemoryHit = serde_json::from_str(&json).unwrap();
         assert_eq!(deserialized.score, 0.95);
-        assert_eq!(
-            deserialized.uri.to_string(),
-            "viking://project/conventions"
-        );
+        assert_eq!(deserialized.uri.to_string(), "viking://project/conventions");
     }
 }

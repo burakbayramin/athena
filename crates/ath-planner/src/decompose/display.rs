@@ -427,8 +427,7 @@ mod tests {
     #[test]
     fn output_contains_assigned_agents_when_present() {
         let mut plan = make_test_plan();
-        plan.phases[0].tasks[0].assigned_agent =
-            Some(ath_types::agent::AgentId::claude("opus-4"));
+        plan.phases[0].tasks[0].assigned_agent = Some(ath_types::agent::AgentId::claude("opus-4"));
         let mut out = String::new();
         format_execution_plan(&plan, &[], &mut out).unwrap();
 

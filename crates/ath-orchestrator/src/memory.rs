@@ -25,7 +25,7 @@ use ath_types::phase::PhaseRecord;
 use ath_types::plan::{ExecutionPlan, PhaseSpec};
 use ath_types::review::ReviewVerdict;
 
-use crate::checkpoint::{Checkpoint, CheckpointStore, plan_fingerprint};
+use crate::checkpoint::{plan_fingerprint, Checkpoint, CheckpointStore};
 use crate::coordinator::AgentCoordinator;
 use crate::error::PhaseRunnerError;
 use crate::phase_runner::{AgentRegistry, FileOutput};
@@ -104,12 +104,14 @@ impl ExtractionLlm for BackendLlmAdapter {
             created_at: chrono::Utc::now(),
         };
 
-        let response = self.backend.send(request).await.map_err(|e| {
-            MemoryError::ExtractionError {
-                stage: "backend_llm_adapter".to_string(),
-                message: format!("AgentBackend::send failed: {e}"),
-            }
-        })?;
+        let response =
+            self.backend
+                .send(request)
+                .await
+                .map_err(|e| MemoryError::ExtractionError {
+                    stage: "backend_llm_adapter".to_string(),
+                    message: format!("AgentBackend::send failed: {e}"),
+                })?;
 
         Ok(response.content)
     }
@@ -176,8 +178,8 @@ pub async fn run_phase_with_memory(
     observer: Option<SharedProgressObserver>,
     memory: &MemoryContext,
 ) -> Result<PhaseRecord, PhaseRunnerError> {
+    use crate::phase_runner::{Pending, PhaseState, RejectOutcome};
     use ath_types::phase::{AgentContribution, PhaseRecord, ReviewAttempt, TokenUsage};
-    use crate::phase_runner::{PhaseState, Pending, RejectOutcome};
 
     let started_at = chrono::Utc::now();
 
@@ -299,7 +301,7 @@ pub async fn run_phase_with_memory(
             ObservationType::ReviewVerdict {
                 reviewer: reviewer.clone(),
                 passed: verdict.passed,
-                severity: verdict.severity.clone(),
+                severity: verdict.severity,
                 reason_summary: verdict.reason.clone(),
                 attempt_number: attempt,
                 phase_id: Some(phase.id),
@@ -512,7 +514,12 @@ async fn execute_phase_tasks_with_memory(
                 .keywords
                 .lock()
                 .unwrap_or_else(|poisoned| poisoned.into_inner());
-            inject_context(&memory.store, &keywords_guard, &prompt, &memory.injection_config)
+            inject_context(
+                &memory.store,
+                &keywords_guard,
+                &prompt,
+                &memory.injection_config,
+            )
         };
 
         let request = AgentRequest {
@@ -536,14 +543,15 @@ async fn execute_phase_tasks_with_memory(
             },
         );
 
-        let response = backend
-            .send(request)
-            .await
-            .map_err(|e| PhaseRunnerError::TaskExecutionFailed {
-                task_name: task.name.clone(),
-                agent: format!("{:?}", agent),
-                reason: e.to_string(),
-            })?;
+        let response =
+            backend
+                .send(request)
+                .await
+                .map_err(|e| PhaseRunnerError::TaskExecutionFailed {
+                    task_name: task.name.clone(),
+                    agent: format!("{:?}", agent),
+                    reason: e.to_string(),
+                })?;
 
         // Record AgentResponse observation
         record_observation(
@@ -708,7 +716,10 @@ impl AgentCoordinator {
                     }
                     Some(cp) => Some(cp),
                     None => Some(Checkpoint::new(
-                        format!("run-{}", chrono::Utc::now().timestamp_nanos_opt().unwrap_or(0)),
+                        format!(
+                            "run-{}",
+                            chrono::Utc::now().timestamp_nanos_opt().unwrap_or(0)
+                        ),
                         plan,
                     )),
                 }
@@ -787,8 +798,7 @@ impl AgentCoordinator {
                 };
 
                 let registry = &*self.registry;
-                let available =
-                    |kind: &AgentId| -> bool { registry.get(kind).is_some() };
+                let available = |kind: &AgentId| -> bool { registry.get(kind).is_some() };
 
                 let record = run_phase_with_memory(
                     phase,
@@ -845,6 +855,7 @@ impl AgentCoordinator {
     ///
     /// All errors are logged but never propagated — the run result
     /// is already determined by the phase execution above.
+    #[allow(clippy::await_holding_lock)]
     async fn post_run_extraction(&self, memory: &MemoryContext) {
         let run_id = memory.run_id;
 
@@ -893,6 +904,8 @@ impl AgentCoordinator {
         let llm_adapter = BackendLlmAdapter::new(backend, agent_kind);
 
         // 3. Run extraction pipeline
+        // The MutexGuard is held across .await because MemoryExtractor borrows it mutably.
+        // This is safe: the Mutex is only contended within this single-threaded extraction path.
         let mut keywords_guard = memory
             .keywords
             .lock()
@@ -1070,11 +1083,9 @@ mod tests {
     #[tokio::test]
     async fn backend_llm_adapter_maps_error_to_memory_error() {
         let claude = AgentId::claude("opus-4");
-        let mock = Arc::new(MockBackend::failing(|| {
-            ath_agents::AgentError::Timeout {
-                provider: "test".into(),
-                duration: std::time::Duration::from_secs(30),
-            }
+        let mock = Arc::new(MockBackend::failing(|| ath_agents::AgentError::Timeout {
+            provider: "test".into(),
+            duration: std::time::Duration::from_secs(30),
         }));
         let adapter = BackendLlmAdapter::new(mock, claude);
 
@@ -1154,7 +1165,9 @@ mod tests {
     }
 
     impl CapturingBackend {
-        fn new(inner: Arc<dyn AgentBackend>) -> (Arc<Self>, Arc<std::sync::Mutex<Vec<AgentRequest>>>) {
+        fn new(
+            inner: Arc<dyn AgentBackend>,
+        ) -> (Arc<Self>, Arc<std::sync::Mutex<Vec<AgentRequest>>>) {
             let captured = Arc::new(std::sync::Mutex::new(Vec::new()));
             let backend = Arc::new(Self {
                 inner,
@@ -1166,11 +1179,11 @@ mod tests {
 
     #[async_trait::async_trait]
     impl AgentBackend for CapturingBackend {
-        async fn send(&self, request: AgentRequest) -> Result<AgentResponse, ath_agents::AgentError> {
-            self.captured
-                .lock()
-                .unwrap()
-                .push(request.clone());
+        async fn send(
+            &self,
+            request: AgentRequest,
+        ) -> Result<AgentResponse, ath_agents::AgentError> {
+            self.captured.lock().unwrap().push(request.clone());
             self.inner.send(request).await
         }
 
@@ -1202,9 +1215,11 @@ mod tests {
         let phase = make_phase(1, "phase-1", tasks);
         let plan = make_plan(vec![phase], vec![1]);
 
-        let task_mock = Arc::new(MockBackend::always_ok(
-            &make_task_output_json("task-1", &claude, "src/main.rs"),
-        ));
+        let task_mock = Arc::new(MockBackend::always_ok(&make_task_output_json(
+            "task-1",
+            &claude,
+            "src/main.rs",
+        )));
         let reviewer_mock = Arc::new(MockBackend::always_ok(&passing_verdict_json()));
 
         let mut registry = AgentRegistry::new();
@@ -1259,19 +1274,34 @@ mod tests {
             );
 
             match &obs.event {
-                ObservationType::AgentRequest { agent, task_name, phase_id, .. } => {
+                ObservationType::AgentRequest {
+                    agent,
+                    task_name,
+                    phase_id,
+                    ..
+                } => {
                     request_count += 1;
                     assert_eq!(*phase_id, Some(1));
                     assert_eq!(task_name.as_deref(), Some("task-1"));
                     assert_eq!(*agent, claude);
                 }
-                ObservationType::AgentResponse { agent, phase_id, task_name, .. } => {
+                ObservationType::AgentResponse {
+                    agent,
+                    phase_id,
+                    task_name,
+                    ..
+                } => {
                     response_count += 1;
                     assert_eq!(*phase_id, Some(1));
                     assert_eq!(task_name.as_deref(), Some("task-1"));
                     assert_eq!(*agent, claude);
                 }
-                ObservationType::ReviewVerdict { reviewer, passed, phase_id, .. } => {
+                ObservationType::ReviewVerdict {
+                    reviewer,
+                    passed,
+                    phase_id,
+                    ..
+                } => {
                     verdict_count += 1;
                     assert_eq!(*phase_id, Some(1));
                     assert!(*passed);
@@ -1334,9 +1364,11 @@ mod tests {
         let plan = make_plan(vec![phase], vec![1]);
 
         // Wrap the task mock in a CapturingBackend to inspect requests
-        let inner_mock = Arc::new(MockBackend::always_ok(
-            &make_task_output_json("task-1", &claude, "src/main.rs"),
-        ));
+        let inner_mock = Arc::new(MockBackend::always_ok(&make_task_output_json(
+            "task-1",
+            &claude,
+            "src/main.rs",
+        )));
         let (capturing_backend, captured_requests) = CapturingBackend::new(inner_mock);
         let reviewer_mock = Arc::new(MockBackend::always_ok(&passing_verdict_json()));
 
@@ -1394,9 +1426,11 @@ mod tests {
         let phase = make_phase(1, "phase-1", tasks);
         let plan = make_plan(vec![phase], vec![1]);
 
-        let task_mock = Arc::new(MockBackend::always_ok(
-            &make_task_output_json("task-1", &claude, "src/main.rs"),
-        ));
+        let task_mock = Arc::new(MockBackend::always_ok(&make_task_output_json(
+            "task-1",
+            &claude,
+            "src/main.rs",
+        )));
         let reviewer_mock = Arc::new(MockBackend::always_ok(&passing_verdict_json()));
 
         let mut registry = AgentRegistry::new();
@@ -1464,9 +1498,11 @@ mod tests {
         let plan = make_plan(vec![phase], vec![1]);
 
         // Use always_ok — extraction calls also go through this mock
-        let task_mock = Arc::new(MockBackend::always_ok(
-            &make_task_output_json("task-1", &claude, "src/main.rs"),
-        ));
+        let task_mock = Arc::new(MockBackend::always_ok(&make_task_output_json(
+            "task-1",
+            &claude,
+            "src/main.rs",
+        )));
         let reviewer_mock = Arc::new(MockBackend::always_ok(&passing_verdict_json()));
 
         let mut registry = AgentRegistry::new();
@@ -1546,7 +1582,8 @@ mod tests {
                 "confidence": 0.9,
                 "evidence": ["MemoryError uses hint()", "Custom error types follow same pattern"]
             }
-        ]).to_string();
+        ])
+        .to_string();
 
         let decisions_json = serde_json::json!([
             {
@@ -1555,7 +1592,8 @@ mod tests {
                 "context": "Phase 1, auth-planning task",
                 "impact": "All API routes require JWT validation middleware"
             }
-        ]).to_string();
+        ])
+        .to_string();
 
         let agent_profiles_json = serde_json::json!([
             {
@@ -1566,7 +1604,8 @@ mod tests {
                 "review_pass_rate": null,
                 "feedback_themes": []
             }
-        ]).to_string();
+        ])
+        .to_string();
 
         // Build sequenced mock: 1 task + 4 extraction responses
         let make_ok_response = |content: &str| -> Result<AgentResponse, ath_agents::AgentError> {
@@ -1640,7 +1679,11 @@ mod tests {
             let s = u.to_string();
             s.starts_with("viking://runs/") && s.ends_with("/summary")
         });
-        assert!(has_run_summary, "Store should contain a run summary URI. URIs: {:?}", uris);
+        assert!(
+            has_run_summary,
+            "Store should contain a run summary URI. URIs: {:?}",
+            uris
+        );
 
         // Keyword index file exists on disk
         assert!(
@@ -1783,9 +1826,11 @@ mod tests {
         let phase = make_phase(1, "phase-1", tasks);
         let plan = make_plan(vec![phase], vec![1]);
 
-        let task_mock = Arc::new(MockBackend::always_ok(
-            &make_task_output_json("task-1", &claude, "src/main.rs"),
-        ));
+        let task_mock = Arc::new(MockBackend::always_ok(&make_task_output_json(
+            "task-1",
+            &claude,
+            "src/main.rs",
+        )));
         let reviewer_mock = Arc::new(MockBackend::always_ok(&passing_verdict_json()));
 
         let mut registry = AgentRegistry::new();

@@ -55,11 +55,10 @@ impl ObservationWriter {
 
     /// Serialize and append a single observation as a JSONL line.
     pub fn write(&mut self, obs: &Observation) -> Result<(), MemoryError> {
-        let json =
-            serde_json::to_string(obs).map_err(|e| MemoryError::ObservationWriteError {
-                path: self.path.display().to_string(),
-                message: format!("Failed to serialize observation: {e}"),
-            })?;
+        let json = serde_json::to_string(obs).map_err(|e| MemoryError::ObservationWriteError {
+            path: self.path.display().to_string(),
+            message: format!("Failed to serialize observation: {e}"),
+        })?;
 
         self.writer
             .write_all(json.as_bytes())
@@ -115,33 +114,30 @@ impl ObservationReader {
     /// Skips empty and whitespace-only lines. Returns an error if the file
     /// cannot be opened or if any non-empty line fails to parse.
     pub fn read_file(path: &Path) -> Result<Vec<Observation>, MemoryError> {
-        let file =
-            File::open(path).map_err(|e| MemoryError::ObservationReadError {
-                path: path.display().to_string(),
-                message: format!("Failed to open observation file: {e}"),
-            })?;
+        let file = File::open(path).map_err(|e| MemoryError::ObservationReadError {
+            path: path.display().to_string(),
+            message: format!("Failed to open observation file: {e}"),
+        })?;
 
         let reader = BufReader::new(file);
         let mut observations = Vec::new();
 
         for (line_num, line_result) in reader.lines().enumerate() {
-            let line =
-                line_result.map_err(|e| MemoryError::ObservationReadError {
-                    path: path.display().to_string(),
-                    message: format!("Failed to read line {}: {e}", line_num + 1),
-                })?;
+            let line = line_result.map_err(|e| MemoryError::ObservationReadError {
+                path: path.display().to_string(),
+                message: format!("Failed to read line {}: {e}", line_num + 1),
+            })?;
 
             let trimmed = line.trim();
             if trimmed.is_empty() {
                 continue;
             }
 
-            let obs: Observation = serde_json::from_str(trimmed).map_err(|e| {
-                MemoryError::ObservationReadError {
+            let obs: Observation =
+                serde_json::from_str(trimmed).map_err(|e| MemoryError::ObservationReadError {
                     path: path.display().to_string(),
                     message: format!("Failed to parse line {}: {e}", line_num + 1),
-                }
-            })?;
+                })?;
 
             observations.push(obs);
         }

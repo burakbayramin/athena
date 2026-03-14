@@ -87,7 +87,11 @@ pub(crate) fn init_at(base: &Path, force: bool) -> Result<()> {
         fs::create_dir_all(&ath_dir)?;
         println!("{} {}", "Created".green(), ath_dir.display());
     } else {
-        println!("{} {} (already exists)", "Skipped".yellow(), ath_dir.display());
+        println!(
+            "{} {} (already exists)",
+            "Skipped".yellow(),
+            ath_dir.display()
+        );
     }
 
     if !memory_dir.exists() {
@@ -149,6 +153,7 @@ fn write_config_file(path: &Path, content: &str, force: bool) -> Result<()> {
     Ok(())
 }
 
+#[cfg(test)]
 pub(crate) fn init_placeholder_message() -> &'static str {
     "Run `ath init` to set up Athena in your project."
 }
@@ -159,12 +164,14 @@ mod tests {
 
     #[test]
     fn example_agents_toml_is_valid_toml() {
-        let _: toml::Value = toml::from_str(EXAMPLE_AGENTS_TOML).expect("agents.toml should be valid TOML");
+        let _: toml::Value =
+            toml::from_str(EXAMPLE_AGENTS_TOML).expect("agents.toml should be valid TOML");
     }
 
     #[test]
     fn example_skills_toml_is_valid_toml() {
-        let _: toml::Value = toml::from_str(EXAMPLE_SKILLS_TOML).expect("skills.toml should be valid TOML");
+        let _: toml::Value =
+            toml::from_str(EXAMPLE_SKILLS_TOML).expect("skills.toml should be valid TOML");
     }
 
     #[test]

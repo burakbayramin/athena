@@ -21,9 +21,9 @@ pub struct KeywordIndex {
 
 /// A small set of English stopwords to filter out.
 const STOPWORDS: &[&str] = &[
-    "a", "an", "the", "and", "or", "but", "in", "on", "at", "to", "for", "of", "with", "by",
-    "is", "it", "as", "be", "was", "are", "this", "that", "from", "not", "no", "if", "so",
-    "can", "do", "has", "have", "had", "will", "would", "could", "should",
+    "a", "an", "the", "and", "or", "but", "in", "on", "at", "to", "for", "of", "with", "by", "is",
+    "it", "as", "be", "was", "are", "this", "that", "from", "not", "no", "if", "so", "can", "do",
+    "has", "have", "had", "will", "would", "could", "should",
 ];
 
 impl KeywordIndex {
@@ -102,7 +102,11 @@ impl KeywordIndex {
                 score,
             })
             .collect();
-        scored.sort_by(|a, b| b.score.partial_cmp(&a.score).unwrap_or(std::cmp::Ordering::Equal));
+        scored.sort_by(|a, b| {
+            b.score
+                .partial_cmp(&a.score)
+                .unwrap_or(std::cmp::Ordering::Equal)
+        });
         scored.truncate(top_k);
         scored
     }
@@ -137,12 +141,11 @@ impl KeywordIndex {
             postings: self.postings.clone(),
             docs: self.docs.clone(),
         };
-        let json = serde_json::to_string_pretty(&data).map_err(|e| {
-            MemoryError::SerializationError {
+        let json =
+            serde_json::to_string_pretty(&data).map_err(|e| MemoryError::SerializationError {
                 message: format!("failed to serialize keyword index: {}", e),
                 source: Some(e),
-            }
-        })?;
+            })?;
 
         if let Some(parent) = path.parent() {
             if !parent.exists() {
@@ -284,8 +287,14 @@ mod tests {
         let path = dir.path().join("keyword_index.json");
 
         let mut index = KeywordIndex::new();
-        index.add("viking://doc/architecture", "hexagonal architecture with ports and adapters");
-        index.add("viking://doc/testing", "unit testing integration testing end to end");
+        index.add(
+            "viking://doc/architecture",
+            "hexagonal architecture with ports and adapters",
+        );
+        index.add(
+            "viking://doc/testing",
+            "unit testing integration testing end to end",
+        );
 
         index.save(&path).unwrap();
         assert!(path.exists());

@@ -16,7 +16,7 @@ use tokio::task::JoinSet;
 use ath_types::phase::PhaseRecord;
 use ath_types::plan::ExecutionPlan;
 
-use crate::checkpoint::{Checkpoint, CheckpointStore, plan_fingerprint};
+use crate::checkpoint::{plan_fingerprint, Checkpoint, CheckpointStore};
 use crate::error::PhaseRunnerError;
 use crate::phase_runner::{run_phase_with_progress, AgentRegistry, FileOutput};
 use crate::progress::{emit_progress, ProgressEvent, SharedProgressObserver};
@@ -106,7 +106,10 @@ impl AgentCoordinator {
                     }
                     Some(cp) => Some(cp),
                     None => Some(Checkpoint::new(
-                        format!("run-{}", chrono::Utc::now().timestamp_nanos_opt().unwrap_or(0)),
+                        format!(
+                            "run-{}",
+                            chrono::Utc::now().timestamp_nanos_opt().unwrap_or(0)
+                        ),
                         plan,
                     )),
                 }
@@ -892,11 +895,7 @@ mod tests {
         }
     }
 
-    fn make_task_spec_with_files(
-        name: &str,
-        agent: Option<AgentId>,
-        files: Vec<&str>,
-    ) -> TaskSpec {
+    fn make_task_spec_with_files(name: &str, agent: Option<AgentId>, files: Vec<&str>) -> TaskSpec {
         let mut spec = make_task_spec(name, agent);
         spec.expected_output_files = files.into_iter().map(String::from).collect();
         spec
@@ -1307,7 +1306,9 @@ mod tests {
         // Collect progress events
         let events = Arc::new(std::sync::Mutex::new(Vec::new()));
         let events_clone = Arc::clone(&events);
-        let observer: SharedProgressObserver = Arc::new(TestProgressObserver { events: events_clone });
+        let observer: SharedProgressObserver = Arc::new(TestProgressObserver {
+            events: events_clone,
+        });
 
         let records = coordinator
             .run_plan_with_progress(&plan, Some(observer), Some(&cp_path))
@@ -1428,10 +1429,7 @@ mod tests {
         // Review: pass for phase 1, fail 3 times for phase 2
         let reviewer_mock = Arc::new(MockBackend::new(vec![
             Ok(mock_response(&passing_verdict_json(), &gemini)),
-            Ok(mock_response(
-                &failing_verdict_json("needs work"),
-                &gemini,
-            )),
+            Ok(mock_response(&failing_verdict_json("needs work"), &gemini)),
             Ok(mock_response(
                 &failing_verdict_json("still needs work"),
                 &gemini,
@@ -1457,7 +1455,10 @@ mod tests {
 
         // But checkpoint should exist with phase 1's record saved
         let saved_cp = CheckpointStore::load(&cp_path).unwrap();
-        assert!(saved_cp.is_some(), "checkpoint should exist after partial failure");
+        assert!(
+            saved_cp.is_some(),
+            "checkpoint should exist after partial failure"
+        );
         let saved_cp = saved_cp.unwrap();
         assert_eq!(saved_cp.completed_count(), 1);
         assert!(saved_cp.completed_phase_ids.contains(&1));

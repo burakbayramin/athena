@@ -29,17 +29,15 @@ pub mod vector;
 // Re-export primary types at crate root for convenience.
 pub use config::{GcConfig, MemoryConfig};
 pub use error::MemoryError;
+pub use extract::{ExtractionConfig, ExtractionLlm, ExtractionResult, MemoryExtractor, RunSummary};
 pub use index::{MemoryIndex, SearchResult};
+pub use inject::{ContextInjector, InjectedContext, InjectionConfig};
 pub use keyword::{KeywordHit, KeywordIndex};
-pub use store::VikingStore;
-pub use types::{LayeredContent, MemoryHit};
 pub use observe::{
     FileOpKind, Observation, ObservationBuffer, ObservationReader, ObservationType,
     ObservationWriter,
 };
-pub use extract::{
-    ExtractionConfig, ExtractionLlm, ExtractionResult, MemoryExtractor, RunSummary,
-};
-pub use inject::{ContextInjector, InjectedContext, InjectionConfig};
+pub use store::VikingStore;
+pub use types::{LayeredContent, MemoryHit};
 pub use uri::VikingUri;
 pub use vector::VectorIndex;

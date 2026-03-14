@@ -108,12 +108,11 @@ impl VectorIndex {
     /// Save the index to a JSON file.
     pub fn save(&self, path: &Path) -> Result<(), MemoryError> {
         let data: Vec<&VectorEntry> = self.entries.iter().collect();
-        let json = serde_json::to_string_pretty(&data).map_err(|e| {
-            MemoryError::SerializationError {
+        let json =
+            serde_json::to_string_pretty(&data).map_err(|e| MemoryError::SerializationError {
                 message: "failed to serialize vector index".into(),
                 source: Some(e),
-            }
-        })?;
+            })?;
 
         // Atomic write: temp + rename
         let tmp = path.with_extension("tmp");
@@ -151,7 +150,10 @@ impl VectorIndex {
             .map(|(idx, entry)| (entry.uri.clone(), idx))
             .collect();
 
-        Ok(Self { entries, uri_to_idx })
+        Ok(Self {
+            entries,
+            uri_to_idx,
+        })
     }
 }
 

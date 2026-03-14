@@ -185,12 +185,17 @@ mod tests {
         let err = "project/conventions".parse::<VikingUri>().unwrap_err();
         assert!(matches!(err, MemoryError::InvalidUri { .. }));
         let msg = format!("{err}");
-        assert!(msg.contains("project/conventions"), "error should contain input");
+        assert!(
+            msg.contains("project/conventions"),
+            "error should contain input"
+        );
     }
 
     #[test]
     fn reject_wrong_scheme() {
-        let err = "http://project/conventions".parse::<VikingUri>().unwrap_err();
+        let err = "http://project/conventions"
+            .parse::<VikingUri>()
+            .unwrap_err();
         assert!(matches!(err, MemoryError::InvalidUri { .. }));
         let msg = format!("{err}");
         assert!(msg.contains("http"));
@@ -198,19 +203,25 @@ mod tests {
 
     #[test]
     fn reject_traversal() {
-        let err = "viking://project/../etc/passwd".parse::<VikingUri>().unwrap_err();
+        let err = "viking://project/../etc/passwd"
+            .parse::<VikingUri>()
+            .unwrap_err();
         assert!(matches!(err, MemoryError::PathTraversal { .. }));
     }
 
     #[test]
     fn reject_empty_segments() {
-        let err = "viking://project//conventions".parse::<VikingUri>().unwrap_err();
+        let err = "viking://project//conventions"
+            .parse::<VikingUri>()
+            .unwrap_err();
         assert!(matches!(err, MemoryError::InvalidUri { .. }));
     }
 
     #[test]
     fn reject_trailing_slash_empty_segment() {
-        let err = "viking://project/conventions/".parse::<VikingUri>().unwrap_err();
+        let err = "viking://project/conventions/"
+            .parse::<VikingUri>()
+            .unwrap_err();
         assert!(matches!(err, MemoryError::InvalidUri { .. }));
     }
 
@@ -222,7 +233,9 @@ mod tests {
 
     #[test]
     fn reject_dot_segment() {
-        let err = "viking://project/./conventions".parse::<VikingUri>().unwrap_err();
+        let err = "viking://project/./conventions"
+            .parse::<VikingUri>()
+            .unwrap_err();
         assert!(matches!(err, MemoryError::InvalidUri { .. }));
     }
 
@@ -231,7 +244,10 @@ mod tests {
         let uri: VikingUri = "viking://project/conventions".parse().unwrap();
         let root = Path::new("/tmp/memory/store");
         let resolved = uri.resolve_path(root).unwrap();
-        assert_eq!(resolved, PathBuf::from("/tmp/memory/store/project/conventions"));
+        assert_eq!(
+            resolved,
+            PathBuf::from("/tmp/memory/store/project/conventions")
+        );
     }
 
     #[test]

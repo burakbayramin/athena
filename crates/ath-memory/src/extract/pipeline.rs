@@ -88,12 +88,13 @@ impl<'a> MemoryExtractor<'a> {
 
         // 5. Build LayeredContent and write to store
         let uri_str = format!("viking://runs/{run_id}/summary");
-        let uri: VikingUri = uri_str.parse().map_err(|e: MemoryError| {
-            MemoryError::ExtractionError {
-                stage: "run_summary".to_string(),
-                message: format!("Failed to construct URI: {e}"),
-            }
-        })?;
+        let uri: VikingUri =
+            uri_str
+                .parse()
+                .map_err(|e: MemoryError| MemoryError::ExtractionError {
+                    stage: "run_summary".to_string(),
+                    message: format!("Failed to construct URI: {e}"),
+                })?;
 
         let content = LayeredContent::new(
             uri.clone(),
@@ -154,38 +155,42 @@ impl<'a> MemoryExtractor<'a> {
         })?;
 
         for conv in &conventions {
-            let slug = if conv.id.is_empty() { "unknown" } else { &conv.id };
+            let slug = if conv.id.is_empty() {
+                "unknown"
+            } else {
+                &conv.id
+            };
             let uri_str = format!("viking://project/conventions/{slug}");
-            let uri: VikingUri = uri_str.parse().map_err(|e: MemoryError| {
-                MemoryError::ExtractionError {
-                    stage: "conventions".to_string(),
-                    message: format!("Failed to construct URI for convention '{slug}': {e}"),
-                }
-            })?;
+            let uri: VikingUri =
+                uri_str
+                    .parse()
+                    .map_err(|e: MemoryError| MemoryError::ExtractionError {
+                        stage: "conventions".to_string(),
+                        message: format!("Failed to construct URI for convention '{slug}': {e}"),
+                    })?;
 
             // Read-then-merge: if an existing entry exists, append evidence
-            let (abstract_text, overview_text) =
-                if let Some(existing) = self.store.read(&uri)? {
-                    let merged_abstract = format!(
-                        "{} (updated: confidence {:.1})",
-                        existing.abstract_text, conv.confidence
-                    );
-                    let merged_overview = format!(
-                        "{}\n\n### Run {run_id}\n\nEvidence: {}",
-                        existing.overview_text,
-                        conv.evidence.join("; ")
-                    );
-                    (merged_abstract, merged_overview)
-                } else {
-                    let abstract_text = conv.description.clone();
-                    let overview_text = format!(
-                        "Convention: {}\nConfidence: {:.1}\nEvidence: {}",
-                        conv.description,
-                        conv.confidence,
-                        conv.evidence.join("; ")
-                    );
-                    (abstract_text, overview_text)
-                };
+            let (abstract_text, overview_text) = if let Some(existing) = self.store.read(&uri)? {
+                let merged_abstract = format!(
+                    "{} (updated: confidence {:.1})",
+                    existing.abstract_text, conv.confidence
+                );
+                let merged_overview = format!(
+                    "{}\n\n### Run {run_id}\n\nEvidence: {}",
+                    existing.overview_text,
+                    conv.evidence.join("; ")
+                );
+                (merged_abstract, merged_overview)
+            } else {
+                let abstract_text = conv.description.clone();
+                let overview_text = format!(
+                    "Convention: {}\nConfidence: {:.1}\nEvidence: {}",
+                    conv.description,
+                    conv.confidence,
+                    conv.evidence.join("; ")
+                );
+                (abstract_text, overview_text)
+            };
 
             let content = LayeredContent::new(uri.clone(), abstract_text, overview_text);
             self.store.write(&content)?;
@@ -242,12 +247,13 @@ impl<'a> MemoryExtractor<'a> {
             // Generate a slug from the decision text, or use index
             let slug = slugify(&dec.decision, i);
             let uri_str = format!("viking://runs/{run_id}/decisions/{slug}");
-            let uri: VikingUri = uri_str.parse().map_err(|e: MemoryError| {
-                MemoryError::ExtractionError {
-                    stage: "decisions".to_string(),
-                    message: format!("Failed to construct URI for decision '{slug}': {e}"),
-                }
-            })?;
+            let uri: VikingUri =
+                uri_str
+                    .parse()
+                    .map_err(|e: MemoryError| MemoryError::ExtractionError {
+                        stage: "decisions".to_string(),
+                        message: format!("Failed to construct URI for decision '{slug}': {e}"),
+                    })?;
 
             let abstract_text = dec.decision.clone();
             let overview_text = format!(
@@ -291,44 +297,41 @@ impl<'a> MemoryExtractor<'a> {
         let prompt = build_agent_profiles_prompt(&observations_jsonl);
         let response = self.llm.complete(&prompt, None).await?;
 
-        let profiles: Vec<AgentProfileUpdate> =
-            serde_json::from_str(&response).map_err(|e| {
-                tracing::warn!(
-                    run_id = %run_id,
-                    raw_response = %response,
-                    error = %e,
-                    "Malformed LLM response for agent profiles"
-                );
-                MemoryError::ExtractionError {
-                    stage: "agent_profiles".to_string(),
-                    message: format!(
-                        "Failed to parse LLM response as Vec<AgentProfileUpdate>: {e}"
-                    ),
-                }
-            })?;
+        let profiles: Vec<AgentProfileUpdate> = serde_json::from_str(&response).map_err(|e| {
+            tracing::warn!(
+                run_id = %run_id,
+                raw_response = %response,
+                error = %e,
+                "Malformed LLM response for agent profiles"
+            );
+            MemoryError::ExtractionError {
+                stage: "agent_profiles".to_string(),
+                message: format!("Failed to parse LLM response as Vec<AgentProfileUpdate>: {e}"),
+            }
+        })?;
 
         for profile in &profiles {
             let kind_slug = slugify(&profile.agent_id, 0);
             let uri_str = format!("viking://agents/{kind_slug}/profile");
-            let uri: VikingUri = uri_str.parse().map_err(|e: MemoryError| {
-                MemoryError::ExtractionError {
-                    stage: "agent_profiles".to_string(),
-                    message: format!(
-                        "Failed to construct URI for agent profile '{kind_slug}': {e}"
-                    ),
-                }
-            })?;
+            let uri: VikingUri =
+                uri_str
+                    .parse()
+                    .map_err(|e: MemoryError| MemoryError::ExtractionError {
+                        stage: "agent_profiles".to_string(),
+                        message: format!(
+                            "Failed to construct URI for agent profile '{kind_slug}': {e}"
+                        ),
+                    })?;
 
             // Read-then-merge semantics
-            let (abstract_text, overview_text) =
-                if let Some(existing) = self.store.read(&uri)? {
-                    let merged_abstract = format!(
-                        "{} | Run {}: {} tasks",
-                        existing.abstract_text,
-                        &run_id.to_string()[..8],
-                        profile.tasks_handled.len()
-                    );
-                    let new_section = format!(
+            let (abstract_text, overview_text) = if let Some(existing) = self.store.read(&uri)? {
+                let merged_abstract = format!(
+                    "{} | Run {}: {} tasks",
+                    existing.abstract_text,
+                    &run_id.to_string()[..8],
+                    profile.tasks_handled.len()
+                );
+                let new_section = format!(
                         "\n\n### Run {run_id}\n\nTasks: {}\nStrengths: {}\nWeaknesses: {}\nPass rate: {}\nFeedback: {}",
                         profile.tasks_handled.join(", "),
                         profile.strengths.join(", "),
@@ -336,13 +339,11 @@ impl<'a> MemoryExtractor<'a> {
                         profile.review_pass_rate.map_or("N/A".to_string(), |r| format!("{:.0}%", r * 100.0)),
                         profile.feedback_themes.join(", "),
                     );
-                    let merged_overview =
-                        format!("{}{}", existing.overview_text, new_section);
-                    (merged_abstract, merged_overview)
-                } else {
-                    let abstract_text =
-                        format!("Agent profile for {}", profile.agent_id);
-                    let overview_text = format!(
+                let merged_overview = format!("{}{}", existing.overview_text, new_section);
+                (merged_abstract, merged_overview)
+            } else {
+                let abstract_text = format!("Agent profile for {}", profile.agent_id);
+                let overview_text = format!(
                         "Agent: {}\nTasks: {}\nStrengths: {}\nWeaknesses: {}\nPass rate: {}\nFeedback: {}",
                         profile.agent_id,
                         profile.tasks_handled.join(", "),
@@ -351,8 +352,8 @@ impl<'a> MemoryExtractor<'a> {
                         profile.review_pass_rate.map_or("N/A".to_string(), |r| format!("{:.0}%", r * 100.0)),
                         profile.feedback_themes.join(", "),
                     );
-                    (abstract_text, overview_text)
-                };
+                (abstract_text, overview_text)
+            };
 
             let content = LayeredContent::new(uri.clone(), abstract_text, overview_text);
             self.store.write(&content)?;
@@ -385,8 +386,7 @@ impl<'a> MemoryExtractor<'a> {
         observations_root: impl AsRef<std::path::Path>,
     ) -> Result<ExtractionResult, MemoryError> {
         // Load observations
-        let observations =
-            ObservationReader::read_run(observations_root.as_ref(), run_id)?;
+        let observations = ObservationReader::read_run(observations_root.as_ref(), run_id)?;
 
         let preprocessed = preprocess_observations(&observations, &self.config);
         if preprocessed.is_empty() {
@@ -475,7 +475,13 @@ fn slugify(text: &str, index: usize) -> String {
         .collect::<Vec<&str>>()
         .join("-")
         .chars()
-        .map(|c| if c.is_alphanumeric() || c == '-' { c } else { '-' })
+        .map(|c| {
+            if c.is_alphanumeric() || c == '-' {
+                c
+            } else {
+                '-'
+            }
+        })
         .collect();
 
     // Collapse multiple hyphens
@@ -506,7 +512,7 @@ pub(crate) mod tests {
     use super::*;
     use crate::extract::types::ExtractionLlm;
     use crate::observe::storage::ObservationWriter;
-    use crate::observe::types::{ObservationType, Observation};
+    use crate::observe::types::{Observation, ObservationType};
     use async_trait::async_trait;
     use ath_types::{AgentId, Severity, TokenUsage};
     use chrono::Utc;
@@ -540,10 +546,7 @@ pub(crate) mod tests {
                 ]
             });
 
-            Self::new(vec![(
-                "abstract_text".to_string(),
-                response.to_string(),
-            )])
+            Self::new(vec![("abstract_text".to_string(), response.to_string())])
         }
 
         /// Create a mock pre-loaded with responses for all four extraction stages.
@@ -840,9 +843,7 @@ pub(crate) mod tests {
         let observations = fixture_observations(run_id);
 
         let mut extractor = MemoryExtractor::new(&store, &mut keywords, &mock_llm, config);
-        let result = extractor
-            .extract_run_summary(&run_id, &observations)
-            .await;
+        let result = extractor.extract_run_summary(&run_id, &observations).await;
 
         assert!(result.is_err());
         let err = result.unwrap_err();
@@ -867,10 +868,7 @@ pub(crate) mod tests {
 
         let mut extractor = MemoryExtractor::new(&store, &mut keywords, &mock_llm, config);
         // Should succeed without calling LLM
-        extractor
-            .extract_run_summary(&run_id, &[])
-            .await
-            .unwrap();
+        extractor.extract_run_summary(&run_id, &[]).await.unwrap();
 
         // Nothing should be in the store
         let uri_str = format!("viking://runs/{run_id}/summary");
@@ -929,13 +927,19 @@ pub(crate) mod tests {
         let uri1: VikingUri = "viking://project/conventions/error-handling-pattern"
             .parse()
             .unwrap();
-        let content1 = store.read(&uri1).unwrap().expect("convention 1 should exist");
+        let content1 = store
+            .read(&uri1)
+            .unwrap()
+            .expect("convention 1 should exist");
         assert!(content1.abstract_text.contains("hint()"));
 
         let uri2: VikingUri = "viking://project/conventions/hexagonal-architecture"
             .parse()
             .unwrap();
-        let content2 = store.read(&uri2).unwrap().expect("convention 2 should exist");
+        let content2 = store
+            .read(&uri2)
+            .unwrap()
+            .expect("convention 2 should exist");
         assert!(content2.abstract_text.contains("hexagonal"));
     }
 
@@ -952,7 +956,8 @@ pub(crate) mod tests {
 
         // First extraction
         let mock_llm_1 = MockExtractionLlm::with_all_stages();
-        let mut extractor = MemoryExtractor::new(&store, &mut keywords, &mock_llm_1, config.clone());
+        let mut extractor =
+            MemoryExtractor::new(&store, &mut keywords, &mock_llm_1, config.clone());
         extractor
             .extract_conventions(&run_id_1, &observations)
             .await
@@ -1044,14 +1049,22 @@ pub(crate) mod tests {
             .unwrap();
 
         // Both runs should have their own decision URIs
-        let uri_1: VikingUri = format!("viking://runs/{run_id_1}/decisions/use-jwt-for-authentication")
-            .parse()
-            .unwrap();
-        let uri_2: VikingUri = format!("viking://runs/{run_id_2}/decisions/use-sqlite-for-migrations")
-            .parse()
-            .unwrap();
-        assert!(store.read(&uri_1).unwrap().is_some(), "run 1 decision should exist");
-        assert!(store.read(&uri_2).unwrap().is_some(), "run 2 decision should exist");
+        let uri_1: VikingUri =
+            format!("viking://runs/{run_id_1}/decisions/use-jwt-for-authentication")
+                .parse()
+                .unwrap();
+        let uri_2: VikingUri =
+            format!("viking://runs/{run_id_2}/decisions/use-sqlite-for-migrations")
+                .parse()
+                .unwrap();
+        assert!(
+            store.read(&uri_1).unwrap().is_some(),
+            "run 1 decision should exist"
+        );
+        assert!(
+            store.read(&uri_2).unwrap().is_some(),
+            "run 2 decision should exist"
+        );
     }
 
     // ── Agent profile tests ─────────────────────────────────────────
@@ -1075,11 +1088,17 @@ pub(crate) mod tests {
 
         // "claude/opus-4" slugifies to "claude-opus-4"
         let uri: VikingUri = "viking://agents/claude-opus-4/profile".parse().unwrap();
-        let content = store.read(&uri).unwrap().expect("claude profile should exist");
+        let content = store
+            .read(&uri)
+            .unwrap()
+            .expect("claude profile should exist");
         assert!(content.abstract_text.contains("claude/opus-4"));
 
         let uri2: VikingUri = "viking://agents/codex-o3/profile".parse().unwrap();
-        let content2 = store.read(&uri2).unwrap().expect("codex profile should exist");
+        let content2 = store
+            .read(&uri2)
+            .unwrap()
+            .expect("codex profile should exist");
         assert!(content2.overview_text.contains("thorough review"));
     }
 
@@ -1112,7 +1131,10 @@ pub(crate) mod tests {
 
         // Claude profile should have merged data from both runs
         let uri: VikingUri = "viking://agents/claude-opus-4/profile".parse().unwrap();
-        let content = store.read(&uri).unwrap().expect("claude profile should exist");
+        let content = store
+            .read(&uri)
+            .unwrap()
+            .expect("claude profile should exist");
         assert!(
             content.overview_text.contains(&format!("Run {run_id_2}")),
             "Overview should contain second run data: {}",
@@ -1187,7 +1209,10 @@ pub(crate) mod tests {
 
         // Verify the other stages actually produced results
         let summary_uri: VikingUri = format!("viking://runs/{run_id}/summary").parse().unwrap();
-        assert!(store.read(&summary_uri).unwrap().is_some(), "summary should exist despite convention failure");
+        assert!(
+            store.read(&summary_uri).unwrap().is_some(),
+            "summary should exist despite convention failure"
+        );
     }
 
     #[tokio::test]
@@ -1223,7 +1248,10 @@ pub(crate) mod tests {
 
     #[test]
     fn slugify_basic() {
-        assert_eq!(slugify("Use JWT for authentication", 0), "use-jwt-for-authentication");
+        assert_eq!(
+            slugify("Use JWT for authentication", 0),
+            "use-jwt-for-authentication"
+        );
     }
 
     #[test]
@@ -1270,40 +1298,65 @@ pub(crate) mod tests {
         let mut extractor = MemoryExtractor::new(&store, &mut keywords, &mock_llm, config);
         let result = extractor.extract_all(&run_id, &obs_root).await.unwrap();
 
-        assert!(result.all_succeeded(), "all 4 stages should succeed: {:?}", result);
+        assert!(
+            result.all_succeeded(),
+            "all 4 stages should succeed: {:?}",
+            result
+        );
         assert_eq!(result.success_count(), 4);
 
         // Verify store entries at expected URIs
         let summary_uri: VikingUri = format!("viking://runs/{run_id}/summary").parse().unwrap();
-        let summary = store.read(&summary_uri).unwrap().expect("summary should exist");
+        let summary = store
+            .read(&summary_uri)
+            .unwrap()
+            .expect("summary should exist");
         assert!(summary.abstract_text.contains("authentication"));
 
         let conv_uri: VikingUri = "viking://project/conventions/error-handling-pattern"
             .parse()
             .unwrap();
-        let conv = store.read(&conv_uri).unwrap().expect("convention should exist");
+        let conv = store
+            .read(&conv_uri)
+            .unwrap()
+            .expect("convention should exist");
         assert!(conv.abstract_text.contains("hint()"));
 
         let decision_uri: VikingUri =
             format!("viking://runs/{run_id}/decisions/use-jwt-for-authentication")
                 .parse()
                 .unwrap();
-        let decision = store.read(&decision_uri).unwrap().expect("decision should exist");
+        let decision = store
+            .read(&decision_uri)
+            .unwrap()
+            .expect("decision should exist");
         assert!(decision.abstract_text.contains("JWT"));
 
         let agent_uri: VikingUri = "viking://agents/claude-opus-4/profile".parse().unwrap();
-        let agent = store.read(&agent_uri).unwrap().expect("agent profile should exist");
+        let agent = store
+            .read(&agent_uri)
+            .unwrap()
+            .expect("agent profile should exist");
         assert!(agent.abstract_text.contains("claude/opus-4"));
 
         // Verify keyword index returns hits
         let summary_hits = keywords.search("authentication JWT", 5);
-        assert!(!summary_hits.is_empty(), "keyword index should find summary");
+        assert!(
+            !summary_hits.is_empty(),
+            "keyword index should find summary"
+        );
 
         let convention_hits = keywords.search("error handling hint", 5);
-        assert!(!convention_hits.is_empty(), "keyword index should find convention");
+        assert!(
+            !convention_hits.is_empty(),
+            "keyword index should find convention"
+        );
 
         let decision_hits = keywords.search("JWT stateless", 5);
-        assert!(!decision_hits.is_empty(), "keyword index should find decision");
+        assert!(
+            !decision_hits.is_empty(),
+            "keyword index should find decision"
+        );
 
         // Verify we have at least 4 URIs in the store
         let all_uris = store.list().unwrap();
@@ -1341,7 +1394,10 @@ pub(crate) mod tests {
         let conv_uri: VikingUri = "viking://project/conventions/error-handling-pattern"
             .parse()
             .unwrap();
-        let conv_after_run1 = store.read(&conv_uri).unwrap().expect("convention should exist");
+        let conv_after_run1 = store
+            .read(&conv_uri)
+            .unwrap()
+            .expect("convention should exist");
         let overview_after_run1 = conv_after_run1.overview_text.clone();
 
         // Run 2 (overlapping convention + new one)
@@ -1359,7 +1415,10 @@ pub(crate) mod tests {
         assert!(result2.all_succeeded(), "run 2 should succeed");
 
         // Verify merge: error-handling-pattern accumulated, not replaced
-        let conv_after_run2 = store.read(&conv_uri).unwrap().expect("convention should exist");
+        let conv_after_run2 = store
+            .read(&conv_uri)
+            .unwrap()
+            .expect("convention should exist");
         assert!(
             conv_after_run2.overview_text.len() > overview_after_run1.len(),
             "Merged overview should be longer. Before: {}, After: {}",
@@ -1367,7 +1426,9 @@ pub(crate) mod tests {
             conv_after_run2.overview_text.len()
         );
         assert!(
-            conv_after_run2.overview_text.contains(&format!("Run {run_id_2}")),
+            conv_after_run2
+                .overview_text
+                .contains(&format!("Run {run_id_2}")),
             "Merged overview should reference run 2"
         );
 
@@ -1424,14 +1485,8 @@ pub(crate) mod tests {
                 "convention".to_string(),
                 "NOT VALID JSON AT ALL {{{{".to_string(),
             ),
-            (
-                "decision".to_string(),
-                serde_json::json!([]).to_string(),
-            ),
-            (
-                "agent_id".to_string(),
-                serde_json::json!([]).to_string(),
-            ),
+            ("decision".to_string(), serde_json::json!([]).to_string()),
+            ("agent_id".to_string(), serde_json::json!([]).to_string()),
         ]);
 
         let mut extractor = MemoryExtractor::new(&store, &mut keywords, &mock_llm, config);

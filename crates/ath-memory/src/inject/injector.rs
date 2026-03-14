@@ -124,9 +124,11 @@ impl<'a> ContextInjector<'a> {
 
         // Section 2: Semantic search results via keyword index
         if total_tokens < config.total_budget {
-            if let Some(text) =
-                self.read_semantic_results(query, config.semantic_results, config.total_budget - total_tokens)
-            {
+            if let Some(text) = self.read_semantic_results(
+                query,
+                config.semantic_results,
+                config.total_budget - total_tokens,
+            ) {
                 let tokens = estimate_tokens(&text);
                 let capped = Self::cap_section_to_remaining(
                     &text,
@@ -179,7 +181,8 @@ impl<'a> ContextInjector<'a> {
         }
 
         // Build the XML-wrapped output
-        let sections_included: Vec<String> = sections.iter().map(|(name, _)| name.clone()).collect();
+        let sections_included: Vec<String> =
+            sections.iter().map(|(name, _)| name.clone()).collect();
 
         let text = if sections.is_empty() {
             String::new()
@@ -340,10 +343,7 @@ impl<'a> ContextInjector<'a> {
                         continue;
                     }
 
-                    parts.push(format!(
-                        "[{}]: {}",
-                        uri_str, entry_truncated
-                    ));
+                    parts.push(format!("[{}]: {}", uri_str, entry_truncated));
                     tokens_used += entry_tokens;
                 }
                 Ok(None) => continue,
@@ -426,7 +426,7 @@ impl<'a> ContextInjector<'a> {
             .collect();
 
         // Sort lexicographically — last one is "most recent" by naming convention.
-        run_summaries.sort_by(|a, b| a.to_string().cmp(&b.to_string()));
+        run_summaries.sort_by_key(|uri| uri.to_string());
 
         if let Some(uri) = run_summaries.last() {
             match self.store.read(uri) {
@@ -518,11 +518,8 @@ mod tests {
         overview_text: &str,
     ) {
         let uri: VikingUri = uri_str.parse().unwrap();
-        let content = LayeredContent::new(
-            uri,
-            abstract_text.to_string(),
-            overview_text.to_string(),
-        );
+        let content =
+            LayeredContent::new(uri, abstract_text.to_string(), overview_text.to_string());
         store.write(&content).unwrap();
         // Index abstract + overview for keyword search
         let combined = format!("{} {}", abstract_text, overview_text);
@@ -587,7 +584,9 @@ mod tests {
         let config = InjectionConfig::default();
         let result = injector.build_context("hexagonal architecture", &config);
 
-        assert!(result.sections_included.contains(&"relevant_context".to_string()));
+        assert!(result
+            .sections_included
+            .contains(&"relevant_context".to_string()));
         assert!(result.text.contains("<relevant_context>"));
         assert!(result.text.contains("hexagonal"));
     }
@@ -804,7 +803,9 @@ mod tests {
         let config = InjectionConfig::default();
         let result = injector.build_context("claude error handling", &config);
 
-        assert!(result.sections_included.contains(&"agent_notes".to_string()));
+        assert!(result
+            .sections_included
+            .contains(&"agent_notes".to_string()));
         assert!(result.text.contains("<agent_notes>"));
         assert!(result.text.contains("explicit error handling"));
     }

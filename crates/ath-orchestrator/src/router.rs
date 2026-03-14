@@ -220,10 +220,8 @@ mod tests {
         // "rust", "logic" => Claude wins, but Claude unavailable => falls back to next
         let table = build_routing_table();
         // Also add an api tag so Gemini is a candidate
-        let result = route_task(&tags(&["rust", "logic", "api"]), &table, |a| {
-            !a.is_claude()
-        })
-        .unwrap();
+        let result =
+            route_task(&tags(&["rust", "logic", "api"]), &table, |a| !a.is_claude()).unwrap();
         assert!(result.agent.is_gemini());
     }
 
@@ -328,9 +326,18 @@ mod tests {
 
         let decisions = assign_all_tasks(&mut phase, &table, |_| true).unwrap();
 
-        assert!(phase.tasks[0].assigned_agent.as_ref().map_or(false, |a| a.is_claude()));
-        assert!(phase.tasks[1].assigned_agent.as_ref().map_or(false, |a| a.is_gemini()));
-        assert!(phase.tasks[2].assigned_agent.as_ref().map_or(false, |a| a.is_codex()));
+        assert!(phase.tasks[0]
+            .assigned_agent
+            .as_ref()
+            .is_some_and(|a| a.is_claude()));
+        assert!(phase.tasks[1]
+            .assigned_agent
+            .as_ref()
+            .is_some_and(|a| a.is_gemini()));
+        assert!(phase.tasks[2]
+            .assigned_agent
+            .as_ref()
+            .is_some_and(|a| a.is_codex()));
 
         // Decisions match task agents
         assert!(decisions[0].agent.is_claude());
