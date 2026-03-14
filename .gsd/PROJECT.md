@@ -52,7 +52,8 @@ Milestone M003 (Resumable Execution) completed 2026-03-14 — all 3 slices deliv
 Milestone M004 (Agent & Skill Plugin System) completed 2026-03-14 — all 5 slices delivered, 2 requirements validated.
 Milestone M005 (Streaming Output) completed 2026-03-14 — 2 slices delivered. Streaming infrastructure end-to-end.
 Milestone M006 (Multi-Turn Conversations) completed 2026-03-14 — 2 slices delivered. Conversation threading in retry loop.
-Milestone M007 (Embedding-Based Memory Recall) completed 2026-03-14 — 2 slices delivered. VectorIndex + ContextInjector integration. 694 tests passing.
+Milestone M007 (Embedding-Based Memory Recall) completed 2026-03-14 — 2 slices delivered. VectorIndex + ContextInjector integration.
+Milestone M008 (ath init Interactive Setup) completed 2026-03-14 — 1 slice delivered. 699 tests passing.
 Tech stack: Rust, tokio, clap, git2, genai, backon.
 Extensible agent system: built-in providers (Anthropic/Claude, Google/Gemini, OpenAI/Codex) plus any OpenAI-compatible endpoint via GenericHandle.
 Module isolation with strict file ownership prevents agent conflicts.
@@ -91,6 +92,7 @@ Durable run reports persisted at `.ath/runs/<run-id>/report.json` with cost esti
 | M005 | Streaming Output | ✅ Complete | 2026-03-14 |
 | M006 | Multi-Turn Conversations | ✅ Complete | 2026-03-14 |
 | M007 | Embedding-Based Memory Recall | ✅ Complete | 2026-03-14 |
+| M008 | ath init Interactive Setup | ✅ Complete | 2026-03-14 |
 
 ---
 *Last updated: 2026-03-14 — M004 (Agent & Skill Plugin System) complete*

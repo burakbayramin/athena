@@ -28,5 +28,6 @@ tokio = { workspace = true, features = ["rt-multi-thread", "macros"] }
 
 [dev-dependencies]
 tempfile.workspace = true
+toml.workspace = true
 uuid.workspace = true
 filetime.workspace = true

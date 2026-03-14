@@ -1,6 +1,6 @@
 # State
 
-**Milestone:** M007 — Embedding-Based Memory Recall
+**Milestone:** M008 — ath init Interactive Setup
 **Status:** complete
 **Active Slice:** none
 **Phase:** idle
@@ -14,11 +14,12 @@
 - M005: ✅ Streaming Output (2 slices)
 - M006: ✅ Multi-Turn Conversations (2 slices)
 - M007: ✅ Embedding-Based Memory Recall (2 slices)
+- M008: ✅ ath init Interactive Setup (1 slice)
 
 ## Test Count
 
-694 tests passing, 0 failures across 8 crates.
+699 tests passing, 0 failures across 8 crates.
 
 ## Pending
 
-- Next milestone TBD
+- All proposed milestones complete

@@ -53,7 +53,7 @@ enum Commands {
     Agents(agents::AgentsArgs),
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub(crate) struct GlobalArgs {
     pub(crate) verbose: bool,
     pub(crate) no_color: bool,
@@ -209,8 +209,8 @@ mod cli_surface {
             let report_help = render_subcommand_help("report");
 
             assert!(
-                init_help.contains("interactive"),
-                "init help should describe interactive setup"
+                init_help.contains("Initialize"),
+                "init help should describe initialization"
             );
             assert!(
                 report_help.contains("latest run"),
@@ -229,11 +229,11 @@ mod cli_surface {
         }
 
         #[test]
-        fn init_placeholder_mentions_example_spec() {
+        fn init_placeholder_mentions_setup() {
             let message = init::init_placeholder_message();
             assert!(
-                message.contains("example spec"),
-                "init placeholder should mention the example spec flow"
+                message.contains("ath init"),
+                "init message should mention the ath init command"
             );
         }
 
